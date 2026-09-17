@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { injectFeedsTree } from '../../providers/feedsTree'
 import { injectSelection } from '../../providers/selection'
 import { injectItems } from '../../providers/items'
@@ -20,6 +20,10 @@ const newUrl = ref('')
 const newFolderName = ref('')
 const confirmOpen = ref(false)
 const pendingDelete = ref<{ kind: 'feed' | 'folder'; id: number; name: string } | null>(null)
+const refreshing = ref(false)
+const draggingFeedId = ref<number | null>(null)
+const dropTarget = ref<{ folderId: number | null } | null>(null)
+const collapsed = reactive<Record<number, boolean>>({})
 
 async function addFeed() {
   const url = newUrl.value.trim()
@@ -93,17 +97,43 @@ function selectFeed(id: number) {
   items.load().catch(() => {})
 }
 
-function moveFeed(feed: Feed, raw: string) {
-  const folderId = raw === 'none' ? null : Number(raw)
-  feeds.moveFeed(feed.id, Number.isFinite(folderId) ? folderId : null).catch((e) => toast.fromError(e))
+function onDragStart(feed: Feed) {
+  draggingFeedId.value = feed.id
+}
+
+function onDragEnd() {
+  draggingFeedId.value = null
+  dropTarget.value = null
+}
+
+function onDragOver(target: number | null) {
+  dropTarget.value = { folderId: target }
+}
+
+function onDrop(target: number | null) {
+  dropTarget.value = null
+  const id = draggingFeedId.value
+  draggingFeedId.value = null
+  if (id == null) return
+  const feed = feeds.state.feeds.find((f) => f.id === id)
+  if (!feed || feed.folder_id === target) return
+  feeds.moveFeed(id, target).catch((e) => toast.fromError(e))
+}
+
+function toggleFolder(id: number) {
+  collapsed[id] = !collapsed[id]
 }
 
 async function refreshAll() {
+  if (refreshing.value) return
+  refreshing.value = true
   try {
     await feeds.refreshAll()
     toast.success('Feeds refreshed')
   } catch (e) {
     toast.fromError(e)
+  } finally {
+    refreshing.value = false
   }
 }
 </script>
@@ -112,8 +142,8 @@ async function refreshAll() {
   <aside class="feeds">
     <header class="feeds__header">
       <span class="brand"><span aria-hidden="true" class="i-lucide-rss text-[16px]" /> tinyrss</span>
-      <Button variant="ghost" size="sm" title="Refresh all feeds" @click="refreshAll">
-        <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" />
+      <Button variant="ghost" size="sm" :disabled="refreshing" title="Refresh all feeds" @click="refreshAll">
+        <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" :class="{ spin: refreshing }" />
       </Button>
     </header>
 
@@ -130,8 +160,19 @@ async function refreshAll() {
       </div>
 
       <section v-for="folder in feeds.state.tree.folderNodes" :key="folder.id" class="folder">
-        <div class="row" :class="{ active: selection.state.folderId === folder.id }" @click="selectFolder(folder.id)">
-          <span aria-hidden="true" class="i-lucide-folder text-[16px]" />
+        <div
+          class="row"
+          :class="{ 'drop-target': dropTarget?.folderId === folder.id }"
+          :title="collapsed[folder.id] ? 'Expand folder' : 'Collapse folder'"
+          @click="toggleFolder(folder.id)"
+          @dragover.prevent="onDragOver(folder.id)"
+          @drop="onDrop(folder.id)"
+        >
+          <span
+            aria-hidden="true"
+            class="text-[16px]"
+            :class="collapsed[folder.id] ? 'i-lucide-folder' : 'i-lucide-folder-open'"
+          />
           <span class="row__label">{{ folder.name }}</span>
           <Badge :count="folder.unread" />
           <button v-if="folder.feeds.length" class="row__act" title="Rename folder" @click.stop="renameFolder(folder.id, folder.name)">
@@ -141,36 +182,52 @@ async function refreshAll() {
             <span aria-hidden="true" class="i-lucide-trash text-[13px]" />
           </button>
         </div>
-        <div class="folder__feeds">
-          <div v-for="feed in folder.feeds" :key="feed.id" class="row row--feed" :class="{ active: selection.state.feedId === feed.id }" @click="selectFeed(feed.id)">
+        <div v-if="!collapsed[folder.id]" class="folder__feeds">
+          <div
+            v-for="feed in folder.feeds"
+            :key="feed.id"
+            class="row row--feed"
+            :class="{ active: selection.state.feedId === feed.id, dragging: draggingFeedId === feed.id }"
+            draggable="true"
+            @click="selectFeed(feed.id)"
+            @dragstart="onDragStart(feed)"
+            @dragend="onDragEnd"
+          >
             <span aria-hidden="true" class="i-lucide-rss text-[14px]" />
             <span class="row__label row__label--clip">{{ feed.title }}</span>
             <Badge :count="feed.unread" />
-            <select class="row__move" title="Move feed" :value="String(feed.folder_id ?? 'none')" @click.stop @change="moveFeed(feed, ($event.target as HTMLSelectElement).value)">
-              <option value="none">Uncategorized</option>
-              <option v-for="f in feeds.state.folders" :key="f.id" :value="String(f.id)">{{ f.name }}</option>
-            </select>
             <button class="row__act" title="Rename feed" @click.stop="renameFeed(feed)"><span aria-hidden="true" class="i-lucide-pencil text-[13px]" /></button>
             <button class="row__act" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
           </div>
         </div>
       </section>
 
-      <section v-if="feeds.state.tree.uncategorized.length" class="folder">
-        <div class="row row--inbox" :class="{ active: selection.state.feedId === null && selection.state.folderId === null }" @click="selectFolder(null)">
+      <section class="folder">
+        <div
+          class="row row--inbox"
+          :class="{ active: selection.state.feedId === null && selection.state.folderId === null, 'drop-target': dropTarget !== null && dropTarget.folderId === null }"
+          @click="selectFolder(null)"
+          @dragover.prevent="onDragOver(null)"
+          @drop="onDrop(null)"
+        >
           <span aria-hidden="true" class="i-lucide-folder-open text-[16px]" />
           <span class="row__label">Uncategorized</span>
           <Badge :count="feeds.state.tree.uncategorizedUnread" />
         </div>
         <div class="folder__feeds">
-          <div v-for="feed in feeds.state.tree.uncategorized" :key="feed.id" class="row row--feed" :class="{ active: selection.state.feedId === feed.id }" @click="selectFeed(feed.id)">
+          <div
+            v-for="feed in feeds.state.tree.uncategorized"
+            :key="feed.id"
+            class="row row--feed"
+            :class="{ active: selection.state.feedId === feed.id, dragging: draggingFeedId === feed.id }"
+            draggable="true"
+            @click="selectFeed(feed.id)"
+            @dragstart="onDragStart(feed)"
+            @dragend="onDragEnd"
+          >
             <span aria-hidden="true" class="i-lucide-rss text-[14px]" />
             <span class="row__label row__label--clip">{{ feed.title }}</span>
             <Badge :count="feed.unread" />
-            <select class="row__move" title="Move feed" :value="String(feed.folder_id ?? 'none')" @click.stop @change="moveFeed(feed, ($event.target as HTMLSelectElement).value)">
-              <option value="none">Uncategorized</option>
-              <option v-for="f in feeds.state.folders" :key="f.id" :value="String(f.id)">{{ f.name }}</option>
-            </select>
             <button class="row__act" title="Rename feed" @click.stop="renameFeed(feed)"><span aria-hidden="true" class="i-lucide-pencil text-[13px]" /></button>
             <button class="row__act" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
           </div>
@@ -245,7 +302,8 @@ async function refreshAll() {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 7px;
+  height: 30px;
+  padding: 0 7px;
   border-radius: 6px;
   color: #3c4450;
   cursor: pointer;
@@ -282,15 +340,13 @@ async function refreshAll() {
 .row:hover .row__act {
   display: inline-flex;
 }
-.row__move {
-  display: none;
-  max-width: 90px;
-  font-size: 11px;
-  border: 1px solid #d8dde6;
-  border-radius: 4px;
+.row.dragging {
+  opacity: 0.4;
 }
-.row:hover .row__move {
-  display: inline-flex;
+.row.drop-target {
+  outline: 1px dashed #2f6fed;
+  outline-offset: -1px;
+  background: #eef4ff;
 }
 .feeds__footer {
   display: flex;
@@ -302,5 +358,13 @@ async function refreshAll() {
   align-self: flex-start;
   margin-left: 12px;
   margin-bottom: 12px;
+}
+.spin {
+  animation: refresh-spin 1s linear infinite;
+}
+@keyframes refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import Icon, { type IconName } from './Icon.vue'
-
 export interface EmptyStateProps {
   message: string
-  icon?: IconName
+  icon?: string
 }
 
-withDefaults(defineProps<EmptyStateProps>(), { icon: 'rss' })
+withDefaults(defineProps<EmptyStateProps>(), { icon: 'i-lucide-rss' })
 </script>
 
 <template>
   <div class="empty">
-    <Icon :name="icon" :size="28" class="empty__icon" />
+    <span aria-hidden="true" :class="icon" class="empty__icon" />
     <p class="empty__msg">{{ message }}</p>
     <slot />
   </div>
@@ -30,6 +28,7 @@ withDefaults(defineProps<EmptyStateProps>(), { icon: 'rss' })
   color: #8a93a3;
 }
 .empty__icon {
+  font-size: 28px;
   opacity: 0.5;
 }
 .empty__msg {

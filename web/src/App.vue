@@ -4,7 +4,6 @@ import { RouterView, useRouter } from 'vue-router'
 import { provideAuth, provideSelection, provideFeedsTree, provideItems } from './providers'
 import { getAuthState } from './providers/auth'
 import { toastStore } from './api/useApiToast'
-import Icon from './components/shared/Icon.vue'
 
 provideAuth()
 const selection = provideSelection()
@@ -28,7 +27,7 @@ watch(
     <RouterView />
     <div class="toasts" aria-live="polite">
       <div v-for="t in toastStore.list" :key="t.id" class="toast" :class="`toast--${t.kind}`">
-        <Icon v-if="t.kind === 'error'" name="x" :size="13" />
+        <span v-if="t.kind === 'error'" aria-hidden="true" class="i-lucide-x text-[13px]" />
         {{ t.message }}
       </div>
     </div>

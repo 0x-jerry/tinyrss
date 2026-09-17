@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { injectAuth } from '../providers/auth'
 import { useApiToast } from '../api/useApiToast'
 import LoginForm from '../components/shared/LoginForm.vue'
-import Icon from '../components/shared/Icon.vue'
 
 const auth = injectAuth()
 const router = useRouter()
@@ -31,7 +30,7 @@ function onLogin(token: string) {
 <template>
   <main class="login">
     <div class="login__card">
-      <div class="login__brand"><Icon name="rss" :size="22" /> tinyrss</div>
+      <div class="login__brand"><span aria-hidden="true" class="i-lucide-rss text-[22px]" /> tinyrss</div>
       <p class="login__hint">
         This instance is protected by an access token. Paste it below to sign in.
       </p>

@@ -5,7 +5,6 @@ import { injectItems } from '../../providers/items'
 import { injectSelection } from '../../providers/selection'
 import { useApiToast } from '../../api/useApiToast'
 import Button from '../shared/Button.vue'
-import Icon from '../shared/Icon.vue'
 import EmptyState from '../shared/EmptyState.vue'
 
 const items = injectItems()
@@ -60,14 +59,14 @@ function formatDate(iso: string): string {
       <header class="reader__head">
         <div class="reader__actions">
           <Button variant="ghost" size="sm" :title="listItem?.is_read ? 'Mark unread' : 'Mark read'" @click="toggleRead">
-            <Icon name="check" /> {{ listItem?.is_read ? 'Unread' : 'Read' }}
+            <span aria-hidden="true" class="i-lucide-check text-[16px]" /> {{ listItem?.is_read ? 'Unread' : 'Read' }}
           </Button>
           <Button variant="ghost" size="sm" :title="listItem?.is_starred ? 'Unstar' : 'Star'" @click="toggleStar">
-            <Icon :name="listItem?.is_starred ? 'star-filled' : 'star'" />
+            <span aria-hidden="true" class="i-lucide-star text-[16px]" />
           </Button>
           <Button v-if="detail.url" variant="ghost" size="sm" title="Open original">
             <a class="reader__link" :href="detail.url" target="_blank" rel="noopener noreferrer">
-              <Icon name="external" /> Open
+              <span aria-hidden="true" class="i-lucide-external-link text-[16px]" /> Open
             </a>
           </Button>
         </div>
@@ -86,7 +85,7 @@ function formatDate(iso: string): string {
         <p v-else class="reader__summary">{{ detail.summary }}</p>
       </div>
     </template>
-    <EmptyState v-else message="Select an article to read it." icon="filter" />
+    <EmptyState v-else message="Select an article to read it." icon="i-lucide-filter" />
   </section>
 </template>
 

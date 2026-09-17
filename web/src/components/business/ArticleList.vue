@@ -5,7 +5,6 @@ import { injectItems, type Filter } from '../../providers/items'
 import { injectSelection } from '../../providers/selection'
 import type { Item } from '../../types/models'
 import Button from '../shared/Button.vue'
-import Icon from '../shared/Icon.vue'
 import EmptyState from '../shared/EmptyState.vue'
 import { useApiToast } from '../../api/useApiToast'
 
@@ -14,10 +13,10 @@ const selection = injectSelection()
 const toast = useApiToast()
 
 const ITEM_HEIGHT = 64
-const filterOptions: { value: Filter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'unread', label: 'Unread' },
-  { value: 'starred', label: 'Starred' },
+const filterOptions: { value: Filter; label: string; icon: string }[] = [
+  { value: 'all', label: 'All', icon: 'i-lucide-list' },
+  { value: 'unread', label: 'Unread', icon: 'i-lucide-mail-open' },
+  { value: 'starred', label: 'Starred', icon: 'i-lucide-star' },
 ]
 
 const search = ref('')
@@ -82,17 +81,17 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
           :class="{ active: items.state.filter === opt.value }"
           @click="setFilter(opt.value)"
         >
+          <span aria-hidden="true" :class="opt.icon" />
           {{ opt.label }}
-          <Icon v-if="opt.value === 'starred'" name="star" :size="12" />
         </button>
       </div>
       <div class="toolbar__right">
         <form @submit.prevent="runSearch" class="search">
-          <Icon name="search" :size="14" class="search__icon" />
+          <span aria-hidden="true" class="i-lucide-search text-[14px] search__icon" />
           <input v-model="search" class="search__input" placeholder="Search…" aria-label="Search" />
         </form>
         <Button variant="ghost" size="sm" title="Mark all read" @click="markAllRead">
-          <Icon name="check" />
+          <span aria-hidden="true" class="i-lucide-check text-[16px]" />
         </Button>
       </div>
     </header>
@@ -112,7 +111,7 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
           @click="select(data)"
         >
           <span class="row__star" :class="{ starred: data.is_starred }" @click.stop="toggleStar(data)">
-            <Icon :name="data.is_starred ? 'star-filled' : 'star'" :size="14" />
+            <span aria-hidden="true" class="i-lucide-star text-[14px]" />
           </span>
           <div class="row__body">
             <div class="row__title">{{ data.is_read ? '' : '● ' }}{{ data.title }}</div>
@@ -139,8 +138,8 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
 }
 .artlist__toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 8px 10px;
   border-bottom: 1px solid #eef0f4;
@@ -148,6 +147,7 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
 .tabs {
   display: flex;
   gap: 4px;
+  flex: 1 1 100%;
 }
 .tab {
   display: inline-flex;
@@ -169,9 +169,11 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   display: flex;
   gap: 6px;
   align-items: center;
+  flex: 1 1 100%;
 }
 .search {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 4px;
   border: 1px solid #d8dde6;
@@ -182,7 +184,8 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   color: #9aa2b0;
 }
 .search__input {
-  width: 110px;
+  flex: 1;
+  min-width: 0;
   border: 0;
   outline: none;
   font: inherit;

@@ -8,7 +8,6 @@ import { useApiToast } from '../../api/useApiToast'
 import type { Feed } from '../../types/models'
 import Button from '../shared/Button.vue'
 import Badge from '../shared/Badge.vue'
-import Icon from '../shared/Icon.vue'
 import ConfirmDialog from '../shared/ConfirmDialog.vue'
 
 const feeds = injectFeedsTree()
@@ -112,68 +111,68 @@ async function refreshAll() {
 <template>
   <aside class="feeds">
     <header class="feeds__header">
-      <span class="brand"><Icon name="rss" /> tinyrss</span>
+      <span class="brand"><span aria-hidden="true" class="i-lucide-rss text-[16px]" /> tinyrss</span>
       <Button variant="ghost" size="sm" title="Refresh all feeds" @click="refreshAll">
-        <Icon name="refresh" />
+        <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" />
       </Button>
     </header>
 
     <form class="add" @submit.prevent="addFeed">
       <input v-model="newUrl" class="add__input" placeholder="Paste feed URL" aria-label="Feed URL" />
-      <Button size="sm" type="submit" title="Add feed"><Icon name="plus" /></Button>
+      <Button size="sm" type="submit" title="Add feed"><span aria-hidden="true" class="i-lucide-plus text-[16px]" /></Button>
     </form>
 
     <nav class="tree">
       <div class="row row--inbox" :class="{ active: selection.state.folderId === null && selection.state.feedId === null }" @click="selectFolder(null)">
-        <Icon name="rss" />
+        <span aria-hidden="true" class="i-lucide-rss text-[16px]" />
         <span class="row__label">All articles</span>
         <Badge :count="feeds.state.tree.totalUnread" />
       </div>
 
       <section v-for="folder in feeds.state.tree.folderNodes" :key="folder.id" class="folder">
         <div class="row" :class="{ active: selection.state.folderId === folder.id }" @click="selectFolder(folder.id)">
-          <Icon name="folder" />
+          <span aria-hidden="true" class="i-lucide-folder text-[16px]" />
           <span class="row__label">{{ folder.name }}</span>
           <Badge :count="folder.unread" />
           <button v-if="folder.feeds.length" class="row__act" title="Rename folder" @click.stop="renameFolder(folder.id, folder.name)">
-            <Icon name="edit" :size="13" />
+            <span aria-hidden="true" class="i-lucide-pencil text-[13px]" />
           </button>
           <button class="row__act" title="Delete folder" @click.stop="confirmDelete('folder', folder.id, folder.name)">
-            <Icon name="trash" :size="13" />
+            <span aria-hidden="true" class="i-lucide-trash text-[13px]" />
           </button>
         </div>
         <div class="folder__feeds">
           <div v-for="feed in folder.feeds" :key="feed.id" class="row row--feed" :class="{ active: selection.state.feedId === feed.id }" @click="selectFeed(feed.id)">
-            <Icon name="rss" :size="14" />
+            <span aria-hidden="true" class="i-lucide-rss text-[14px]" />
             <span class="row__label row__label--clip">{{ feed.title }}</span>
             <Badge :count="feed.unread" />
             <select class="row__move" title="Move feed" :value="String(feed.folder_id ?? 'none')" @click.stop @change="moveFeed(feed, ($event.target as HTMLSelectElement).value)">
               <option value="none">Uncategorized</option>
               <option v-for="f in feeds.state.folders" :key="f.id" :value="String(f.id)">{{ f.name }}</option>
             </select>
-            <button class="row__act" title="Rename feed" @click.stop="renameFeed(feed)"><Icon name="edit" :size="13" /></button>
-            <button class="row__act" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><Icon name="trash" :size="13" /></button>
+            <button class="row__act" title="Rename feed" @click.stop="renameFeed(feed)"><span aria-hidden="true" class="i-lucide-pencil text-[13px]" /></button>
+            <button class="row__act" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
           </div>
         </div>
       </section>
 
       <section v-if="feeds.state.tree.uncategorized.length" class="folder">
         <div class="row row--inbox" :class="{ active: selection.state.feedId === null && selection.state.folderId === null }" @click="selectFolder(null)">
-          <Icon name="folder-open" />
+          <span aria-hidden="true" class="i-lucide-folder-open text-[16px]" />
           <span class="row__label">Uncategorized</span>
           <Badge :count="feeds.state.tree.uncategorizedUnread" />
         </div>
         <div class="folder__feeds">
           <div v-for="feed in feeds.state.tree.uncategorized" :key="feed.id" class="row row--feed" :class="{ active: selection.state.feedId === feed.id }" @click="selectFeed(feed.id)">
-            <Icon name="rss" :size="14" />
+            <span aria-hidden="true" class="i-lucide-rss text-[14px]" />
             <span class="row__label row__label--clip">{{ feed.title }}</span>
             <Badge :count="feed.unread" />
             <select class="row__move" title="Move feed" :value="String(feed.folder_id ?? 'none')" @click.stop @change="moveFeed(feed, ($event.target as HTMLSelectElement).value)">
               <option value="none">Uncategorized</option>
               <option v-for="f in feeds.state.folders" :key="f.id" :value="String(f.id)">{{ f.name }}</option>
             </select>
-            <button class="row__act" title="Rename feed" @click.stop="renameFeed(feed)"><Icon name="edit" :size="13" /></button>
-            <button class="row__act" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><Icon name="trash" :size="13" /></button>
+            <button class="row__act" title="Rename feed" @click.stop="renameFeed(feed)"><span aria-hidden="true" class="i-lucide-pencil text-[13px]" /></button>
+            <button class="row__act" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
           </div>
         </div>
       </section>
@@ -182,10 +181,10 @@ async function refreshAll() {
     <footer class="feeds__footer">
       <form class="add" @submit.prevent="addFolder">
         <input v-model="newFolderName" class="add__input" placeholder="New folder name" aria-label="New folder name" />
-        <Button size="sm" type="submit" title="Add folder"><Icon name="plus" /></Button>
+        <Button size="sm" type="submit" title="Add folder"><span aria-hidden="true" class="i-lucide-plus text-[16px]" /></Button>
       </form>
       <Button variant="ghost" size="sm" class="logout" @click="auth.logout()">
-        <Icon name="logout" /> Log out
+        <span aria-hidden="true" class="i-lucide-log-out text-[16px]" /> Log out
       </Button>
     </footer>
 

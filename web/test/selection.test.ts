@@ -7,6 +7,13 @@ describe('selection provider', () => {
     expect(p.state).toEqual({ folderId: null, feedId: null, itemId: null })
   })
 
+  it('accepts an initial selection to restore', () => {
+    const p = createSelectionProvider({ feedId: 3, itemId: 9 })
+    expect(p.state.feedId).toBe(3)
+    expect(p.state.itemId).toBe(9)
+    expect(p.state.folderId).toBeNull()
+  })
+
   it('selecting a feed clears any folder', () => {
     const p = createSelectionProvider()
     p.selectFolder(2)

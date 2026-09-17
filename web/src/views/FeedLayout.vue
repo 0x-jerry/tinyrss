@@ -19,6 +19,9 @@ onMounted(async () => {
   try {
     await feeds.reload()
     await items.load()
+    // Reopen the article remembered from the last session. The itemId watcher
+    // below never fires for a value restored before mount, so open it directly.
+    if (selection.state.itemId != null) await items.openItem(selection.state.itemId).catch(() => {})
   } catch (e) {
     toast.fromError(e)
   }

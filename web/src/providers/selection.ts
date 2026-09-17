@@ -15,8 +15,10 @@ export interface SelectionProvider {
   clear: () => void
 }
 
-export function createSelectionProvider(): SelectionProvider {
-  const raw = reactive<SelectionState>({ folderId: null, feedId: null, itemId: null })
+const EMPTY: SelectionState = { folderId: null, feedId: null, itemId: null }
+
+export function createSelectionProvider(initial: SelectionState = EMPTY): SelectionProvider {
+  const raw = reactive<SelectionState>({ ...EMPTY, ...initial })
 
   return {
     state: readonly(raw),
@@ -41,8 +43,8 @@ export function createSelectionProvider(): SelectionProvider {
   }
 }
 
-export function provideSelection(): SelectionProvider {
-  const p = createSelectionProvider()
+export function provideSelection(initial?: SelectionState): SelectionProvider {
+  const p = createSelectionProvider(initial)
   provide(selectionKey, p)
   return p
 }

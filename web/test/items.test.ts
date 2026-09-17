@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { buildItemQuery, createItemsProvider } from '../src/providers/items'
+import { buildItemQuery, createItemsProvider, scopeKeyOf, parseScopeFilters } from '../src/providers/items'
 import type { ItemsApi } from '../src/api/endpoints'
 import type { ItemsResponse } from '../src/types/models'
 
@@ -106,6 +106,43 @@ describe('items provider', () => {
     expect(p.state.items.length).toBe(1)
     expect(queries[0]).toContain('unread=true')
     expect(queries[1]).not.toContain('unread=true')
+  })
+
+  it('honors a filter remembered per feed scope', async () => {
+    const sel = { feedId: null as number | null, folderId: null as number | null }
+    const queries: string[] = []
+    const apiObj = makeApi(async (query) => {
+      queries.push(query)
+      return { items: [item(1)], total: 1, page: 1, limit: 50 } as ItemsResponse
+    })
+    const p = createItemsProvider({ apiObj, getSelection: () => sel, onItemsChanged })
+    // Choose starred on feed 7...
+    sel.feedId = 7
+    await p.setFilter('starred')
+    expect(queries[queries.length - 1]).toContain('starred=true')
+    // ...feed 8 keeps its own default (unread), not feed 7's starred...
+    sel.feedId = 8
+    await p.load()
+    expect(queries[queries.length - 1]).toContain('unread=true')
+    expect(queries[queries.length - 1]).not.toContain('starred=true')
+    // ...and switching back to feed 7 restores starred.
+    sel.feedId = 7
+    await p.load()
+    expect(queries[queries.length - 1]).toContain('starred=true')
+  })
+
+  it('keys the scope by feed, then folder, then all articles', () => {
+    expect(scopeKeyOf({ feedId: 7, folderId: 3 })).toBe('feed:7')
+    expect(scopeKeyOf({ feedId: null, folderId: 3 })).toBe('folder:3')
+    expect(scopeKeyOf({ feedId: null, folderId: null })).toBe('all')
+  })
+
+  it('parses scope filters, dropping malformed entries', () => {
+    expect(parseScopeFilters('{"feed:1":"starred","folder:2":"unread","feed:3":"nope","all":true}')).toEqual({
+      'feed:1': 'starred',
+      'folder:2': 'unread',
+    })
+    expect(parseScopeFilters('not json')).toEqual({})
   })
 
   it('keeps the unread filter when there are unread items', async () => {

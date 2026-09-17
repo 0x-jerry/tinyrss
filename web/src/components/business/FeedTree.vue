@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { ref } from 'vue'
 import { injectFeedsTree } from '../../providers/feedsTree'
 import { injectSelection } from '../../providers/selection'
 import { injectAuth } from '../../providers/auth'
 import { useApiToast } from '../../api/useApiToast'
+import { useFeedFolds } from '../../composables/useFeedFolds'
 import type { Feed } from '../../types/models'
 import Button from '../shared/Button.vue'
 import Badge from '../shared/Badge.vue'
@@ -13,6 +14,7 @@ const feeds = injectFeedsTree()
 const selection = injectSelection()
 const auth = injectAuth()
 const toast = useApiToast()
+const { uncategorizedCollapsed, isCollapsed, toggleFolder, toggleUncategorized } = useFeedFolds()
 
 const newUrl = ref('')
 const newFolderName = ref('')
@@ -21,8 +23,6 @@ const pendingDelete = ref<{ kind: 'feed' | 'folder'; id: number; name: string } 
 const refreshing = ref(false)
 const draggingFeedId = ref<number | null>(null)
 const dropTarget = ref<{ folderId: number | null } | null>(null)
-const collapsed = reactive<Record<number, boolean>>({})
-const uncategorizedCollapsed = ref(false)
 
 async function addFeed() {
   const url = newUrl.value.trim()
@@ -117,20 +117,12 @@ function onDrop(target: number | null) {
   feeds.moveFeed(id, target).catch((e) => toast.fromError(e))
 }
 
-function toggleFolder(id: number) {
-  collapsed[id] = !collapsed[id]
-}
-
-function toggleUncategorized() {
-  uncategorizedCollapsed.value = !uncategorizedCollapsed.value
-}
-
 function folderIcon(id: number): string {
-  return collapsed[id] ? 'i-lucide-folder' : 'i-lucide-folder-open'
+  return isCollapsed(id) ? 'i-lucide-folder' : 'i-lucide-folder-open'
 }
 
 function folderTitle(id: number): string {
-  return collapsed[id] ? 'Expand folder' : 'Collapse folder'
+  return isCollapsed(id) ? 'Expand folder' : 'Collapse folder'
 }
 
 function uncategorizedFolderIcon(): string {
@@ -263,7 +255,7 @@ function downloadText(filename: string, text: string, mime: string) {
             <span aria-hidden="true" class="i-lucide-trash text-[13px]" />
           </button>
         </div>
-        <div v-if="!collapsed[folder.id]" class="folder__feeds">
+        <div v-if="!isCollapsed(folder.id)" class="folder__feeds">
           <div
             v-for="feed in folder.feeds"
             :key="feed.id"

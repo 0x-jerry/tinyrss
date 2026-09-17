@@ -4,5 +4,5 @@ export { provideSelection, injectSelection, createSelectionProvider } from './se
 export type { SelectionProvider, SelectionState } from './selection'
 export { provideFeedsTree, injectFeedsTree, createFeedsTreeProvider, buildTree } from './feedsTree'
 export type { FeedsTreeProvider, FeedsTreeState, FolderNode, TreeShape } from './feedsTree'
-export { provideItems, injectItems, createItemsProvider, buildItemQuery } from './items'
-export type { ItemsProvider, ItemsState, ItemsDeps, Filter } from './items'
+export { provideItems, injectItems, createItemsProvider, buildItemQuery, scopeKeyOf, parseScopeFilters } from './items'
+export type { ItemsProvider, ItemsState, ItemsDeps, Filter, ScopeKey } from './items'

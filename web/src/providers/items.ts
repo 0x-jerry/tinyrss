@@ -1,4 +1,5 @@
-import { inject, reactive, readonly, provide } from 'vue'
+import { inject, reactive, readonly, provide, watch } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
 import { itemsKey } from './keys'
 import type { SelectionProvider } from './selection'
 import type { FeedsTreeProvider } from './feedsTree'
@@ -6,6 +7,36 @@ import { api, type ItemsApi } from '../api/endpoints'
 import type { Item, ItemDetail } from '../types/models'
 
 export type Filter = 'all' | 'unread' | 'starred'
+
+const FILTERS: readonly Filter[] = ['all', 'unread', 'starred']
+const SCOPE_FILTERS_KEY = 'tinyrss.scopeFilters'
+
+export type ScopeKey = 'all' | `folder:${number}` | `feed:${number}`
+
+export function scopeKeyOf(selection: { feedId: number | null; folderId: number | null }): ScopeKey {
+  if (selection.feedId != null) return `feed:${selection.feedId}`
+  if (selection.folderId != null) return `folder:${selection.folderId}`
+  return 'all'
+}
+
+export function parseScopeFilters(raw: string): Partial<Record<ScopeKey, Filter>> {
+  try {
+    const v = JSON.parse(raw)
+    if (typeof v !== 'object' || v === null) return {}
+    const out: Partial<Record<ScopeKey, Filter>> = {}
+    for (const [k, val] of Object.entries(v)) {
+      if (FILTERS.includes(val as Filter)) (out as Record<string, Filter>)[k] = val as Filter
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+const scopeFiltersSerializer = {
+  read: (raw: string) => parseScopeFilters(raw),
+  write: (v: Partial<Record<ScopeKey, Filter>>) => JSON.stringify(v),
+}
 
 export interface ItemsState {
   items: Item[]
@@ -60,16 +91,37 @@ export function buildItemQuery(
 
 export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
   const apiObj = deps.apiObj ?? api
+  // Each feed/folder (and "all articles") remembers its own filter.
+  const filters = useLocalStorage<Partial<Record<ScopeKey, Filter>>>(SCOPE_FILTERS_KEY, {}, {
+    serializer: scopeFiltersSerializer,
+  })
+
+  function currentScope(): ScopeKey {
+    return scopeKeyOf(deps.getSelection())
+  }
+  function filterForScope(): Filter {
+    const f = filters.value[currentScope()]
+    return f && FILTERS.includes(f) ? f : 'unread'
+  }
+
   const raw = reactive<ItemsState>({
     items: [],
     total: 0,
     page: 1,
     limit: 50,
     loading: false,
-    filter: 'unread',
+    filter: filterForScope(),
     search: '',
     selectedItem: null,
   })
+
+  // Adopt the scope's remembered filter when the feed/folder selection changes.
+  watch(
+    () => [deps.getSelection().feedId, deps.getSelection().folderId],
+    () => {
+      raw.filter = filterForScope()
+    },
+  )
 
   function notify() {
     deps.onItemsChanged?.()
@@ -78,11 +130,13 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
   async function fetchPage(page: number, replace: boolean, defaultLoad = false) {
     raw.loading = true
     try {
-      const res = await apiObj.listItems(buildItemQuery(deps.getSelection(), raw.filter, raw.search, page, raw.limit))
+      const filter = filterForScope()
+      const res = await apiObj.listItems(buildItemQuery(deps.getSelection(), filter, raw.search, page, raw.limit))
       // Unread is the default filter; on a default load, when nothing is unread
       // in the current scope, fall back to showing everything instead of an
       // empty list. An explicit filter choice (setFilter) is never overridden.
-      if (defaultLoad && replace && raw.filter === 'unread' && res.total === 0) {
+      if (defaultLoad && replace && filter === 'unread' && res.total === 0) {
+        filters.value[currentScope()] = 'all'
         raw.filter = 'all'
         await fetchPage(1, true)
         return
@@ -129,6 +183,7 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
       await fetchPage(raw.page + 1, false)
     },
     setFilter: async (f) => {
+      filters.value[currentScope()] = f
       raw.filter = f
       await fetchPage(1, true)
     },
@@ -166,7 +221,10 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
   }
 }
 
-export function provideItems(deps: { selection: SelectionProvider; feedsTree: FeedsTreeProvider }): ItemsProvider {
+export function provideItems(deps: {
+  selection: SelectionProvider
+  feedsTree: FeedsTreeProvider
+}): ItemsProvider {
   const provider = createItemsProvider({
     getSelection: () => ({
       feedId: deps.selection.state.feedId,

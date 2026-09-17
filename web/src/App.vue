@@ -4,11 +4,27 @@ import { RouterView, useRouter } from 'vue-router'
 import { provideAuth, provideSelection, provideFeedsTree, provideItems } from './providers'
 import { getAuthState } from './providers/auth'
 import { toastStore } from './api/useApiToast'
+import { usePersistentView, sanitizeSelection } from './composables/usePersistentView'
 
 provideAuth()
-const selection = provideSelection()
+const persisted = usePersistentView()
+const initial = sanitizeSelection(persisted.value)
+const selection = provideSelection(initial)
 const feedsTree = provideFeedsTree()
 provideItems({ selection, feedsTree })
+
+// Remember the selected feed/folder and article across reloads/relogins.
+// The filter pairs to its feed/folder scope inside the items provider.
+watch(
+  () => [selection.state.folderId, selection.state.feedId, selection.state.itemId],
+  () => {
+    persisted.value = {
+      folderId: selection.state.folderId,
+      feedId: selection.state.feedId,
+      itemId: selection.state.itemId,
+    }
+  },
+)
 
 const router = useRouter()
 

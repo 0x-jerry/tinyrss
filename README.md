@@ -33,6 +33,28 @@ TINYRSS_TOKEN=$(openssl rand -hex 32) ./tinyrss -addr 127.0.0.1:8087 -db data/ti
 # open http://127.0.0.1:8087 and paste the token to log in
 ```
 
+## Docker
+
+A multi-stage `Dockerfile` builds the frontend with bun, embeds it into the Go
+binary, and ships a slim Alpine image with a `/data` volume for the SQLite DB.
+
+```sh
+# Build and run with the bundled Compose file
+TINYRSS_TOKEN=$(openssl rand -hex 32) docker compose up -d --build
+# open http://127.0.0.1:8087 and paste the token to log in
+```
+
+The `docker-compose.yml` maps port 8087, persists the DB in a named volume
+(`tinyrss-data`), and reads `TINYRSS_TOKEN` from the environment (set it before
+`up`, or edit the file). The container listens on `0.0.0.0:8087`, so a token is
+required. To run a one-off container instead:
+
+```sh
+docker build -t tinyrss .
+docker run -d -p 8087:8087 -v tinyrss-data:/data \
+  -e TINYRSS_TOKEN=$(openssl rand -hex 32) tinyrss
+```
+
 ## Make targets
 
 | Target | What it does |

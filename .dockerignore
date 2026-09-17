@@ -1,0 +1,7 @@
+.git
+data
+web/dist
+web/node_modules
+node_modules
+tinyrss
+.DS_Store

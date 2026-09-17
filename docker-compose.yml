@@ -1,0 +1,16 @@
+services:
+  tinyrss:
+    build: .
+    image: tinyrss:latest
+    restart: unless-stopped
+    ports:
+      - "8087:8087"
+    environment:
+      # Require auth; paste this into the login page after the first run.
+      # Generate with: openssl rand -hex 32
+      TINYRSS_TOKEN: change-me
+    volumes:
+      - tinyrss-data:/data
+
+volumes:
+  tinyrss-data:

@@ -24,26 +24,16 @@ const safeHtml = computed(() => {
   return DOMPurify.sanitize(d.content || d.summary || '')
 })
 
-async function toggleRead() {
+function toggleRead() {
   const id = selection.state.itemId
   if (id == null) return
-  try {
-    if (listItem.value?.is_read) await items.markUnread(id)
-    else await items.markRead(id)
-  } catch (e) {
-    toast.fromError(e)
-  }
+  items.toggleRead(id).catch((e) => toast.fromError(e))
 }
 
-async function toggleStar() {
+function toggleStar() {
   const id = selection.state.itemId
   if (id == null) return
-  try {
-    if (listItem.value?.is_starred) await items.unstar(id)
-    else await items.star(id)
-  } catch (e) {
-    toast.fromError(e)
-  }
+  items.toggleStar(id).catch((e) => toast.fromError(e))
 }
 
 function formatDate(iso: string): string {

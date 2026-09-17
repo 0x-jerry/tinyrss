@@ -51,9 +51,7 @@ function move(step: number) {
 function toggleRead() {
   const id = selection.state.itemId
   if (id == null) return
-  const item = items.state.items.find((i) => i.id === id)
-  if (item?.is_read) items.markUnread(id).catch(() => {})
-  else items.markRead(id).catch(() => {})
+  items.toggleRead(id).catch(() => {})
 }
 
 useKeyboard({ next: () => move(1), prev: () => move(-1), toggleRead })

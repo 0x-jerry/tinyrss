@@ -1,4 +1,4 @@
-import { inject, reactive, readonly, provide, type DeepReadonly } from 'vue'
+import { inject, reactive, readonly, provide } from 'vue'
 import { itemsKey } from './keys'
 import type { SelectionProvider } from './selection'
 import type { FeedsTreeProvider } from './feedsTree'
@@ -25,12 +25,14 @@ export interface ItemsDeps {
 }
 
 export interface ItemsProvider {
-  state: DeepReadonly<ItemsState>
+  state: Readonly<ItemsState>
   load: () => Promise<void>
   nextPage: () => Promise<void>
   setFilter: (f: Filter) => Promise<void>
   setSearch: (s: string) => Promise<void>
   openItem: (id: number) => Promise<void>
+  toggleRead: (id: number) => Promise<void>
+  toggleStar: (id: number) => Promise<void>
   markRead: (id: number) => Promise<void>
   markUnread: (id: number) => Promise<void>
   star: (id: number) => Promise<void>
@@ -64,7 +66,7 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
     page: 1,
     limit: 50,
     loading: false,
-    filter: 'all',
+    filter: 'unread',
     search: '',
     selectedItem: null,
   })
@@ -73,10 +75,18 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
     deps.onItemsChanged?.()
   }
 
-  async function fetchPage(page: number, replace: boolean) {
+  async function fetchPage(page: number, replace: boolean, defaultLoad = false) {
     raw.loading = true
     try {
       const res = await apiObj.listItems(buildItemQuery(deps.getSelection(), raw.filter, raw.search, page, raw.limit))
+      // Unread is the default filter; on a default load, when nothing is unread
+      // in the current scope, fall back to showing everything instead of an
+      // empty list. An explicit filter choice (setFilter) is never overridden.
+      if (defaultLoad && replace && raw.filter === 'unread' && res.total === 0) {
+        raw.filter = 'all'
+        await fetchPage(1, true)
+        return
+      }
       raw.items = replace ? res.items : raw.items.concat(res.items)
       raw.total = res.total
       raw.page = res.page
@@ -92,9 +102,28 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
     if (raw.selectedItem?.id === id) Object.assign(raw.selectedItem, patch)
   }
 
+  // Every read/star mutation goes through these two: optimistic patch + notify
+  // for reads, then the API call. Toggles reuse them to avoid re-duplicating
+  // the read/unread/star/unstar switching in every component.
+  async function setItemRead(id: number, read: boolean) {
+    patch(id, { is_read: read })
+    notify()
+    await apiObj.setItemState(id, read ? 'read' : 'unread')
+  }
+  async function setItemStarred(id: number, starred: boolean) {
+    patch(id, { is_starred: starred })
+    await apiObj.setItemState(id, starred ? 'star' : 'unstar')
+  }
+
+  function findItem(id: number) {
+    return raw.items.find((i) => i.id === id)
+  }
+
   return {
-    state: readonly(raw),
-    load: () => fetchPage(1, true),
+    // read-only runtime guard from Vue's readonly(); items stays mutable-typed so
+    // the virtual list (useVirtualList) receives Item[] without a component-side cast.
+    state: readonly(raw) as Readonly<ItemsState>,
+    load: () => fetchPage(1, true, true),
     nextPage: async () => {
       if (raw.page * raw.limit >= raw.total) return
       await fetchPage(raw.page + 1, false)
@@ -115,24 +144,20 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
       notify()
       await apiObj.setItemState(id, 'read')
     },
-    markRead: async (id) => {
-      patch(id, { is_read: true })
-      notify()
-      await apiObj.setItemState(id, 'read')
+    toggleRead: async (id) => {
+      const item = findItem(id)
+      if (!item) return
+      await setItemRead(id, !item.is_read)
     },
-    markUnread: async (id) => {
-      patch(id, { is_read: false })
-      notify()
-      await apiObj.setItemState(id, 'unread')
+    toggleStar: async (id) => {
+      const item = findItem(id)
+      if (!item) return
+      await setItemStarred(id, !item.is_starred)
     },
-    star: async (id) => {
-      patch(id, { is_starred: true })
-      await apiObj.setItemState(id, 'star')
-    },
-    unstar: async (id) => {
-      patch(id, { is_starred: false })
-      await apiObj.setItemState(id, 'unstar')
-    },
+    markRead: (id) => setItemRead(id, true),
+    markUnread: (id) => setItemRead(id, false),
+    star: (id) => setItemStarred(id, true),
+    unstar: (id) => setItemStarred(id, false),
     markAllRead: async () => {
       await apiObj.readAll(deps.getSelection().feedId, deps.getSelection().folderId)
       raw.items.forEach((i) => (i.is_read = true))

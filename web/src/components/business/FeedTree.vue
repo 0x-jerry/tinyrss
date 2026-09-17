@@ -2,7 +2,6 @@
 import { reactive, ref } from 'vue'
 import { injectFeedsTree } from '../../providers/feedsTree'
 import { injectSelection } from '../../providers/selection'
-import { injectItems } from '../../providers/items'
 import { injectAuth } from '../../providers/auth'
 import { useApiToast } from '../../api/useApiToast'
 import type { Feed } from '../../types/models'
@@ -12,7 +11,6 @@ import ConfirmDialog from '../shared/ConfirmDialog.vue'
 
 const feeds = injectFeedsTree()
 const selection = injectSelection()
-const items = injectItems()
 const auth = injectAuth()
 const toast = useApiToast()
 
@@ -90,12 +88,10 @@ async function doDelete() {
 
 function selectFolder(id: number | null) {
   selection.selectFolder(id)
-  items.load().catch(() => {})
 }
 
 function selectFeed(id: number) {
   selection.selectFeed(id)
-  items.load().catch(() => {})
 }
 
 function onDragStart(feed: Feed) {
@@ -127,6 +123,22 @@ function toggleFolder(id: number) {
 
 function toggleUncategorized() {
   uncategorizedCollapsed.value = !uncategorizedCollapsed.value
+}
+
+function folderIcon(id: number): string {
+  return collapsed[id] ? 'i-lucide-folder' : 'i-lucide-folder-open'
+}
+
+function folderTitle(id: number): string {
+  return collapsed[id] ? 'Expand folder' : 'Collapse folder'
+}
+
+function uncategorizedFolderIcon(): string {
+  return uncategorizedCollapsed.value ? 'i-lucide-folder' : 'i-lucide-folder-open'
+}
+
+function uncategorizedFolderTitle(): string {
+  return uncategorizedCollapsed.value ? 'Expand' : 'Collapse'
 }
 
 async function refreshAll() {
@@ -168,7 +180,7 @@ async function refreshAll() {
         <div
           class="row"
           :class="{ 'drop-target': dropTarget?.folderId === folder.id }"
-          :title="collapsed[folder.id] ? 'Expand folder' : 'Collapse folder'"
+          :title="folderTitle(folder.id)"
           @click="toggleFolder(folder.id)"
           @dragover.prevent="onDragOver(folder.id)"
           @drop="onDrop(folder.id)"
@@ -176,7 +188,7 @@ async function refreshAll() {
           <span
             aria-hidden="true"
             class="text-[16px]"
-            :class="collapsed[folder.id] ? 'i-lucide-folder' : 'i-lucide-folder-open'"
+            :class="folderIcon(folder.id)"
           />
           <span class="row__label">{{ folder.name }}</span>
           <Badge :count="folder.unread" />
@@ -211,7 +223,7 @@ async function refreshAll() {
         <div
           class="row row--inbox"
           :class="{ 'drop-target': dropTarget !== null && dropTarget.folderId === null }"
-          :title="uncategorizedCollapsed ? 'Expand' : 'Collapse'"
+          :title="uncategorizedFolderTitle()"
           @click="toggleUncategorized()"
           @dragover.prevent="onDragOver(null)"
           @drop="onDrop(null)"
@@ -219,7 +231,7 @@ async function refreshAll() {
           <span
             aria-hidden="true"
             class="text-[16px]"
-            :class="uncategorizedCollapsed ? 'i-lucide-folder' : 'i-lucide-folder-open'"
+            :class="uncategorizedFolderIcon()"
           />
           <span class="row__label">Uncategorized</span>
           <Badge :count="feeds.state.tree.uncategorizedUnread" />

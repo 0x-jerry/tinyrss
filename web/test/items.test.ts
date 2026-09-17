@@ -91,6 +91,46 @@ describe('items provider', () => {
     expect(calls[0]).toContain('feed_id=7')
   })
 
+  it('defaults to unread and falls back to all when nothing is unread', async () => {
+    const queries: string[] = []
+    const apiObj = makeApi(async (query) => {
+      queries.push(query)
+      return query.includes('unread=true')
+        ? ({ items: [], total: 0, page: 1, limit: 50 } as ItemsResponse)
+        : ({ items: [item(1)], total: 1, page: 1, limit: 50 } as ItemsResponse)
+    })
+    const p = createItemsProvider({ apiObj, getSelection: () => selection, onItemsChanged })
+    expect(p.state.filter).toBe('unread')
+    await p.load()
+    expect(p.state.filter).toBe('all')
+    expect(p.state.items.length).toBe(1)
+    expect(queries[0]).toContain('unread=true')
+    expect(queries[1]).not.toContain('unread=true')
+  })
+
+  it('keeps the unread filter when there are unread items', async () => {
+    const apiObj = makeApi(async (query) => {
+      const unread = query.includes('unread=true')
+      return { items: unread ? [item(1)] : [], total: 1, page: 1, limit: 50 } as ItemsResponse
+    })
+    const p = createItemsProvider({ apiObj, getSelection: () => selection, onItemsChanged })
+    await p.load()
+    expect(p.state.filter).toBe('unread')
+    expect(p.state.items.length).toBe(1)
+  })
+
+  it('does not fall back to all when the user explicitly picks unread', async () => {
+    const apiObj = makeApi(async (query) =>
+      query.includes('unread=true')
+        ? ({ items: [], total: 0, page: 1, limit: 50 } as ItemsResponse)
+        : ({ items: [item(1)], total: 1, page: 1, limit: 50 } as ItemsResponse),
+    )
+    const p = createItemsProvider({ apiObj, getSelection: () => selection, onItemsChanged })
+    await p.setFilter('unread')
+    expect(p.state.filter).toBe('unread')
+    expect(p.state.items.length).toBe(0)
+  })
+
   it('toggles filters', async () => {
     const p = makeProvider()
     await p.setFilter('unread')
@@ -115,5 +155,38 @@ describe('items provider', () => {
     await p.load()
     await p.markAllRead()
     expect(p.state.items.every((i) => i.is_read)).toBe(true)
+  })
+
+  it('toggleRead flips read state via the api and notifies', async () => {
+    const actions: string[] = []
+    const apiObj = makeApi(async (query) => ({ items: [item(1)], total: 1, page: 1, limit: 50 }))
+    apiObj.setItemState = async (_id, action) => {
+      actions.push(action)
+    }
+    const p = createItemsProvider({ apiObj, getSelection: () => selection, onItemsChanged })
+    await p.load()
+    await p.toggleRead(p.state.items[0].id)
+    expect(p.state.items[0].is_read).toBe(true)
+    expect(actions).toEqual(['read'])
+    expect(onItemsChanged).toHaveBeenCalled()
+    await p.toggleRead(p.state.items[0].id)
+    expect(p.state.items[0].is_read).toBe(false)
+    expect(actions).toEqual(['read', 'unread'])
+  })
+
+  it('toggleStar flips star state via the api', async () => {
+    const actions: string[] = []
+    const apiObj = makeApi(async () => ({ items: [item(1)], total: 1, page: 1, limit: 50 }))
+    apiObj.setItemState = async (_id, action) => {
+      actions.push(action)
+    }
+    const p = createItemsProvider({ apiObj, getSelection: () => selection, onItemsChanged })
+    await p.load()
+    await p.toggleStar(p.state.items[0].id)
+    expect(p.state.items[0].is_starred).toBe(true)
+    expect(actions).toEqual(['star'])
+    await p.toggleStar(p.state.items[0].id)
+    expect(p.state.items[0].is_starred).toBe(false)
+    expect(actions).toEqual(['star', 'unstar'])
   })
 })

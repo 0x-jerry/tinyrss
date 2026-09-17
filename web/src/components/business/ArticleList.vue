@@ -22,7 +22,7 @@ const filterOptions: { value: Filter; label: string; icon: string }[] = [
 const search = ref('')
 const loadTrigger = ref<HTMLElement | null>(null)
 
-const source = computed<Item[]>(() => items.state.items as unknown as Item[])
+const source = computed<Item[]>(() => items.state.items)
 const { list: rows, containerProps, wrapperProps } = useVirtualList(source, { itemHeight: ITEM_HEIGHT })
 
 useIntersectionObserver(loadTrigger, ([entry]) => {
@@ -49,13 +49,8 @@ async function runSearch() {
   }
 }
 
-async function toggleStar(item: Item) {
-  try {
-    if (item.is_starred) await items.unstar(item.id)
-    else await items.star(item.id)
-  } catch (e) {
-    toast.fromError(e)
-  }
+function toggleStar(item: Item) {
+  items.toggleStar(item.id).catch((e) => toast.fromError(e))
 }
 
 async function markAllRead() {

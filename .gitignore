@@ -1,0 +1,16 @@
+# macOS junk
+.DS_Store
+
+# Runtime data
+/data/
+
+# Frontend build artifacts + deps
+/web/dist/
+/web/node_modules/
+/web/bun.lock*
+
+# Ephemeral dev cache/junk
+/.cache/
+
+# Built binary
+/tinyrss

@@ -24,6 +24,7 @@ const refreshing = ref(false)
 const draggingFeedId = ref<number | null>(null)
 const dropTarget = ref<{ folderId: number | null } | null>(null)
 const collapsed = reactive<Record<number, boolean>>({})
+const uncategorizedCollapsed = ref(false)
 
 async function addFeed() {
   const url = newUrl.value.trim()
@@ -124,6 +125,10 @@ function toggleFolder(id: number) {
   collapsed[id] = !collapsed[id]
 }
 
+function toggleUncategorized() {
+  uncategorizedCollapsed.value = !uncategorizedCollapsed.value
+}
+
 async function refreshAll() {
   if (refreshing.value) return
   refreshing.value = true
@@ -205,16 +210,21 @@ async function refreshAll() {
       <section class="folder">
         <div
           class="row row--inbox"
-          :class="{ active: selection.state.feedId === null && selection.state.folderId === null, 'drop-target': dropTarget !== null && dropTarget.folderId === null }"
-          @click="selectFolder(null)"
+          :class="{ 'drop-target': dropTarget !== null && dropTarget.folderId === null }"
+          :title="uncategorizedCollapsed ? 'Expand' : 'Collapse'"
+          @click="toggleUncategorized()"
           @dragover.prevent="onDragOver(null)"
           @drop="onDrop(null)"
         >
-          <span aria-hidden="true" class="i-lucide-folder-open text-[16px]" />
+          <span
+            aria-hidden="true"
+            class="text-[16px]"
+            :class="uncategorizedCollapsed ? 'i-lucide-folder' : 'i-lucide-folder-open'"
+          />
           <span class="row__label">Uncategorized</span>
           <Badge :count="feeds.state.tree.uncategorizedUnread" />
         </div>
-        <div class="folder__feeds">
+        <div v-if="!uncategorizedCollapsed" class="folder__feeds">
           <div
             v-for="feed in feeds.state.tree.uncategorized"
             :key="feed.id"

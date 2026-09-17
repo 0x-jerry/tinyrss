@@ -1,4 +1,4 @@
-import { request } from './client'
+import { request, requestText } from './client'
 import type {
   Feed,
   FeedRefreshResult,
@@ -33,6 +33,8 @@ export interface FeedsTreeApi {
   createFolder(name: string): Promise<Folder>
   updateFolder(id: number, name: string): Promise<Folder>
   deleteFolder(id: number): Promise<void>
+  importOpml(form: FormData): Promise<OpmlImportResult>
+  exportOpml(): Promise<string>
 }
 
 function readAllQuery(feedId: number | null, folderId: number | null): string {
@@ -73,5 +75,5 @@ export const api: ItemsApi & FeedsTreeApi & {
   health: () => request<Health>('GET', '/api/health'),
   stats: () => request<Stats>('GET', '/api/stats'),
   importOpml: (form) => request<OpmlImportResult>('POST', '/api/opml/import', form),
-  exportOpml: () => request<string>('GET', '/api/opml/export'),
+  exportOpml: () => requestText('GET', '/api/opml/export'),
 }

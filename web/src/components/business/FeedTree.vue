@@ -153,16 +153,80 @@ async function refreshAll() {
     refreshing.value = false
   }
 }
+
+const fileInput = ref<HTMLInputElement | null>(null)
+const importing = ref(false)
+
+function openImport() {
+  fileInput.value?.click()
+}
+
+async function onImportFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  importFile(file).finally(() => {
+    input.value = ''
+  })
+}
+
+async function importFile(file: File) {
+  if (importing.value) return
+  importing.value = true
+  const form = new FormData()
+  form.append('file', file)
+  try {
+    const added = await feeds.importOpmlForm(form)
+    toast.success(`Added ${added} feed${added === 1 ? '' : 's'}`)
+  } catch (e) {
+    toast.fromError(e)
+  } finally {
+    importing.value = false
+  }
+}
+
+function exportOpml() {
+  feeds
+    .exportOpmlText()
+    .then((text) => downloadText('tinyrss-subscriptions.opml.xml', text, 'application/xml'))
+    .catch((e) => toast.fromError(e))
+}
+
+function downloadText(filename: string, text: string, mime: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <template>
   <aside class="feeds">
     <header class="feeds__header">
       <span class="brand"><span aria-hidden="true" class="i-lucide-rss text-[16px]" /> tinyrss</span>
-      <Button variant="ghost" size="sm" :disabled="refreshing" title="Refresh all feeds" @click="refreshAll">
-        <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" :class="{ spin: refreshing }" />
-      </Button>
+      <div class="feeds__actions">
+        <Button variant="ghost" size="sm" :disabled="refreshing" title="Refresh all feeds" @click="refreshAll">
+          <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" :class="{ spin: refreshing }" />
+        </Button>
+        <Button variant="ghost" size="sm" title="Import OPML" @click="openImport">
+          <span aria-hidden="true" class="i-lucide-upload text-[16px]" />
+        </Button>
+        <Button variant="ghost" size="sm" title="Export OPML" @click="exportOpml">
+          <span aria-hidden="true" class="i-lucide-download text-[16px]" />
+        </Button>
+      </div>
     </header>
+
+    <input
+      ref="fileInput"
+      class="import-input"
+      type="file"
+      accept=".opml,.xml,application/xml,text/xml"
+      :disabled="importing"
+      @change="onImportFile"
+    />
 
     <form class="add" @submit.prevent="addFeed">
       <input v-model="newUrl" class="add__input" placeholder="Paste feed URL" aria-label="Feed URL" />
@@ -294,6 +358,11 @@ async function refreshAll() {
   padding: 12px;
   border-bottom: 1px solid #eef0f4;
 }
+.feeds__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .brand {
   display: inline-flex;
   align-items: center;
@@ -380,6 +449,9 @@ async function refreshAll() {
   align-self: flex-start;
   margin-left: 12px;
   margin-bottom: 12px;
+}
+.import-input {
+  display: none;
 }
 .spin {
   animation: refresh-spin 1s linear infinite;

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { request, configureAuth } from '../src/api/client'
+import { request, requestText, configureAuth } from '../src/api/client'
 
 describe('api client', () => {
   const fakeFetch = vi.fn()
@@ -55,5 +55,18 @@ describe('api client', () => {
     fakeFetch.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 }))
     await expect(request('GET', '/api/items')).rejects.toMatchObject({ status: 401, message: 'unauthorized' })
     expect(unauthorizedCalls).toBe(1)
+  })
+
+  it('requestText returns the raw body as text and attaches the token', async () => {
+    const opml = '<?xml version="1.0"?><opml version="2.0"><body/></opml>'
+    fakeFetch.mockResolvedValueOnce(new Response(opml, { status: 200 }))
+    await expect(requestText('GET', '/api/opml/export')).resolves.toBe(opml)
+    const [, init] = fakeFetch.mock.calls[0] as unknown as [unknown, { headers: Record<string, string> }]
+    expect(init.headers['Authorization']).toBe('Bearer tok-123')
+  })
+
+  it('requestText throws ApiError on non-2xx', async () => {
+    fakeFetch.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'boom' }), { status: 500 }))
+    await expect(requestText('GET', '/api/opml/export')).rejects.toMatchObject({ status: 500, message: 'boom' })
   })
 })

@@ -63,6 +63,8 @@ export interface FeedsTreeProvider {
   refreshAll: () => Promise<void>
   refreshFeed: (id: number) => Promise<void>
   markAllRead: () => Promise<void>
+  importOpmlForm: (form: FormData) => Promise<number>
+  exportOpmlText: () => Promise<string>
 }
 
 export function createFeedsTreeProvider(apiObj: FeedsTreeApi = api): FeedsTreeProvider {
@@ -141,6 +143,12 @@ export function createFeedsTreeProvider(apiObj: FeedsTreeApi = api): FeedsTreePr
       await apiObj.readAll(null, null)
       await reload()
     },
+    importOpmlForm: async (form) => {
+      const res = await apiObj.importOpml(form)
+      await reload()
+      return res.added
+    },
+    exportOpmlText: () => apiObj.exportOpml(),
   }
 }
 

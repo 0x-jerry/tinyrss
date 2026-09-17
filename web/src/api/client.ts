@@ -57,3 +57,35 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
 }
+
+/**
+ * Like request but returns the raw response text (for endpoints that serve
+ * non-JSON bodies, e.g. OPML export).
+ */
+export async function requestText(method: string, path: string): Promise<string> {
+  const headers: Record<string, string> = {}
+  const token = hooks.getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await fetch(path, { method, headers })
+
+  if (res.status === 401) {
+    hooks.onUnauthorized()
+    throw new ApiError(401, 'unauthorized')
+  }
+
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`
+    try {
+      const data: unknown = await res.json()
+      if (data && typeof data === 'object' && typeof (data as { error?: unknown }).error === 'string') {
+        message = (data as { error: string }).error
+      }
+    } catch {
+      /* fall back to the status text */
+    }
+    throw new ApiError(res.status, message)
+  }
+
+  return await res.text()
+}

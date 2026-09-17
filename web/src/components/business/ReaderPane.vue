@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import DOMPurify from 'dompurify'
 import { injectItems } from '../../providers/items'
 import { injectSelection } from '../../providers/selection'
+import { injectFeedsTree } from '../../providers/feedsTree'
 import { useApiToast } from '../../api/useApiToast'
+import { api } from '../../api/endpoints'
+import { renderKind } from '../../renderMode'
 import Button from '../shared/Button.vue'
 import EmptyState from '../shared/EmptyState.vue'
 
 const items = injectItems()
 const selection = injectSelection()
+const feedsTree = injectFeedsTree()
 const toast = useApiToast()
 
 const detail = computed(() => items.state.selectedItem)
@@ -17,12 +21,45 @@ const listItem = computed(() =>
   selection.state.itemId == null ? null : items.state.items.find((i) => i.id === selection.state.itemId) ?? null,
 )
 
+const feed = computed(() => {
+  const d = detail.value
+  if (!d) return null
+  return feedsTree.state.feeds.find((f) => f.id === d.feed_id) ?? null
+})
+const kind = computed(() => renderKind(feed.value?.render_mode ?? 0, detail.value?.url ?? null))
+
 // Feeds render ONLY through DOMPurify before v-html; everything else is Vue-escaped.
 const safeHtml = computed(() => {
   const d = detail.value
   if (!d) return ''
   return DOMPurify.sanitize(d.content || d.summary || '')
 })
+
+const serverHtml = ref('')
+const serverError = ref('')
+const serverLoading = ref(false)
+
+watch(
+  () => (kind.value === 'server' ? detail.value?.url : null),
+  (url) => {
+    serverHtml.value = ''
+    serverError.value = ''
+    if (!url) return
+    loadServer(url)
+  },
+  { immediate: true },
+)
+
+async function loadServer(url: string) {
+  serverLoading.value = true
+  try {
+    serverHtml.value = await api.renderUrl(url)
+  } catch (e) {
+    serverError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    serverLoading.value = false
+  }
+}
 
 function toggleRead() {
   const id = selection.state.itemId
@@ -34,6 +71,18 @@ function toggleStar() {
   const id = selection.state.itemId
   if (id == null) return
   items.toggleStar(id).catch((e) => toast.fromError(e))
+}
+
+function onModeChange(e: Event) {
+  const mode = Number((e.target as HTMLSelectElement).value)
+  if (!detail.value || !feed.value) return
+  feedsTree.setRenderMode(feed.value.id, mode).catch((err) => toast.fromError(err))
+}
+
+function openUrl() {
+  const url = detail.value?.url
+  if (!url) return
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 function formatDate(iso: string): string {
@@ -52,16 +101,32 @@ function formatDate(iso: string): string {
             <span aria-hidden="true" class="i-lucide-check text-[16px]" /> {{ listItem?.is_read ? 'Unread' : 'Read' }}
           </Button>
           <Button variant="ghost" size="sm" :title="listItem?.is_starred ? 'Unstar' : 'Star'" @click="toggleStar">
-            <span aria-hidden="true" class="i-lucide-star text-[16px]" />
+            <span aria-hidden="true" class="i-lucide-star text-[16px]" :class="{ starred: listItem?.is_starred }" />
           </Button>
-          <Button v-if="detail.url" variant="ghost" size="sm" title="Open original">
-            <a class="reader__link" :href="detail.url" target="_blank" rel="noopener noreferrer">
-              <span aria-hidden="true" class="i-lucide-external-link text-[16px]" /> Open
-            </a>
+          <select
+            class="reader__mode"
+            :value="feed?.render_mode ?? 0"
+            :disabled="!detail || !feed"
+            title="Render mode"
+            @change="onModeChange"
+          >
+            <option :value="0">Content</option>
+            <option :value="1">Iframe</option>
+            <option :value="2">Server</option>
+          </select>
+          <Button v-if="detail.url" variant="ghost" size="sm" title="Open in new window" @click="openUrl">
+            <span aria-hidden="true" class="i-lucide-external-link text-[16px]" />
           </Button>
         </div>
       </header>
-      <div class="reader__scroll">
+      <div v-if="kind === 'server'" class="reader__frame-wrap">
+        <iframe v-if="serverHtml" class="reader__frame" :srcdoc="serverHtml" sandbox="allow-scripts" title="Article" />
+        <div v-else class="reader__frame-msg">{{ serverError || 'Loading…' }}</div>
+      </div>
+      <div v-else-if="kind === 'iframe'" class="reader__frame-wrap">
+        <iframe class="reader__frame" :src="detail.url" :title="detail.title" />
+      </div>
+      <div v-else class="reader__scroll">
         <h1 class="reader__title">
           <a v-if="detail.url" :href="detail.url" target="_blank" rel="noopener noreferrer">{{ detail.title }}</a>
           <template v-else>{{ detail.title }}</template>
@@ -98,12 +163,36 @@ function formatDate(iso: string): string {
   display: flex;
   gap: 6px;
 }
-.reader__link {
-  display: inline-flex;
+.reader__actions .starred {
+  color: #f5a623;
+}
+.reader__mode {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid #d8dde6;
+  border-radius: 6px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  color: #3c4450;
+}
+.reader__frame-wrap {
+  flex: 1;
+  min-height: 0;
+}
+.reader__frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.reader__frame-msg {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  color: inherit;
-  text-decoration: none;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  font-size: 14px;
+  color: #8a93a3;
 }
 .reader__scroll {
   flex: 1;

@@ -78,7 +78,7 @@ func (r *Repo) DeleteFolder(id int) error {
 
 // ---- feeds ----
 
-const feedCols = `id, title, feed_url, site_url, description, folder_id,
+const feedCols = `id, title, feed_url, site_url, description, render_mode, folder_id,
 	etag, last_modified, last_fetched_at, fetch_error, created_at, updated_at,
 	(SELECT COUNT(*) FROM items i WHERE i.feed_id = feeds.id AND i.is_read = 0)`
 
@@ -86,7 +86,7 @@ func scanFeed(sc interface{ Scan(...any) error }) (Feed, error) {
 	var f Feed
 	var folderID sql.NullInt64
 	var lastFetched sql.NullString
-	err := sc.Scan(&f.ID, &f.Title, &f.FeedURL, &f.SiteURL, &f.Description, &folderID,
+	err := sc.Scan(&f.ID, &f.Title, &f.FeedURL, &f.SiteURL, &f.Description, &f.RenderMode, &folderID,
 		&f.ETag, &f.LastModified, &lastFetched, &f.FetchError, &f.CreatedAt, &f.UpdatedAt, &f.Unread)
 	if folderID.Valid {
 		id := int(folderID.Int64)
@@ -192,6 +192,17 @@ func (r *Repo) DeleteFeed(id int) error {
 		return err
 	}
 	return requireAffected(res, "feed")
+}
+
+func (r *Repo) SetRenderMode(id int, mode int) (Feed, error) {
+	res, err := r.DB.Exec(`UPDATE feeds SET render_mode = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, mode, id)
+	if err != nil {
+		return Feed{}, err
+	}
+	if err := requireAffected(res, "feed"); err != nil {
+		return Feed{}, err
+	}
+	return r.GetFeed(id)
 }
 
 // recordFetchResult updates a feed after a fetch attempt regardless of outcome

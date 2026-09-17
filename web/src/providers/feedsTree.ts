@@ -62,6 +62,7 @@ export interface FeedsTreeProvider {
   deleteFolder: (id: number) => Promise<void>
   refreshAll: () => Promise<void>
   refreshFeed: (id: number) => Promise<void>
+  setRenderMode: (id: number, mode: number) => Promise<void>
   markAllRead: () => Promise<void>
   importOpmlForm: (form: FormData) => Promise<number>
   exportOpmlText: () => Promise<string>
@@ -138,6 +139,11 @@ export function createFeedsTreeProvider(apiObj: FeedsTreeApi = api): FeedsTreePr
     refreshFeed: async (id) => {
       await apiObj.refreshFeed(id)
       await reload()
+    },
+    setRenderMode: async (id, mode) => {
+      const updated = await apiObj.setFeedRenderMode(id, mode)
+      const feed = raw.feeds.find((f) => f.id === id)
+      if (feed) feed.render_mode = updated.render_mode
     },
     markAllRead: async () => {
       await apiObj.readAll(null, null)

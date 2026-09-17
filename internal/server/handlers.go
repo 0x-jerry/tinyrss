@@ -3,8 +3,10 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -17,6 +19,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/feeds/{id}", s.handleGetFeed)
 	mux.HandleFunc("PUT /api/feeds/{id}", s.handleUpdateFeed)
 	mux.HandleFunc("DELETE /api/feeds/{id}", s.handleDeleteFeed)
+	mux.HandleFunc("POST /api/feeds/{id}/render-mode", s.handleSetRenderMode)
 	mux.HandleFunc("POST /api/feeds/{id}/refresh", s.handleRefreshFeed)
 
 	mux.HandleFunc("GET /api/folders", s.handleListFolders)
@@ -31,6 +34,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/items/{id}/star", s.handleMarkItem("star", true))
 	mux.HandleFunc("POST /api/items/{id}/unstar", s.handleMarkItem("unstar", false))
 	mux.HandleFunc("POST /api/items/read-all", s.handleReadAll)
+
+	mux.HandleFunc("GET /api/render", s.handleRender)
 
 	mux.HandleFunc("POST /api/opml/import", s.handleOpmlImport)
 	mux.HandleFunc("GET /api/opml/export", s.handleOpmlExport)
@@ -132,6 +137,29 @@ func (s *Server) handleDeleteFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleSetRenderMode(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		RenderMode int `json:"render_mode"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		return
+	}
+	if body.RenderMode != 0 && body.RenderMode != 1 && body.RenderMode != 2 {
+		writeError(w, http.StatusBadRequest, "render_mode must be 0, 1 or 2")
+		return
+	}
+	feed, err := s.repo.SetRenderMode(id, body.RenderMode)
+	if err != nil {
+		s.repoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, feed)
 }
 
 func (s *Server) handleRefreshFeed(w http.ResponseWriter, r *http.Request) {
@@ -291,6 +319,37 @@ func (s *Server) handleReadAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"count": count})
+}
+
+func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("url")
+	if raw == "" {
+		writeError(w, http.StatusBadRequest, "url is required")
+		return
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		writeError(w, http.StatusBadRequest, "url must be http(s)")
+		return
+	}
+	body, err := s.fetcher.FetchRender(raw)
+	if err != nil {
+		writeRenderError(w, "Could not load page: "+err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", "sandbox allow-scripts allow-forms; referrer no-referrer")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
+}
+
+func writeRenderError(w http.ResponseWriter, msg string) {
+	body := "<!doctype html><meta charset=utf-8><body style='font-family:system-ui;padding:24px;color:#444'>" + html.EscapeString(msg) + "</body>"
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusBadGateway)
+	_, _ = w.Write([]byte(body))
 }
 
 func (s *Server) handleOpmlImport(w http.ResponseWriter, r *http.Request) {

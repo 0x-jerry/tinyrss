@@ -26,8 +26,29 @@ func TestStoreMigrationsApplied(t *testing.T) {
 	if err := st.DB.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
-	if n != 1 {
-		t.Fatalf("want 1 applied migration, got %d", n)
+	if n != 2 {
+		t.Fatalf("want 2 applied migrations, got %d", n)
+	}
+}
+
+func TestSetRenderMode(t *testing.T) {
+	repo := newTestRepo(t)
+	feed, err := repo.CreateFeed(Feed{Title: "B", FeedURL: "https://b.example/rss"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feed.RenderMode != 0 {
+		t.Fatalf("default render_mode = %d, want 0", feed.RenderMode)
+	}
+	got, err := repo.SetRenderMode(feed.ID, 1)
+	if err != nil {
+		t.Fatalf("set render mode: %v", err)
+	}
+	if got.RenderMode != 1 {
+		t.Fatalf("render_mode after set = %d, want 1", got.RenderMode)
+	}
+	if _, err := repo.SetRenderMode(99999, 1); err == nil {
+		t.Fatal("expected not-found for missing feed")
 	}
 }
 

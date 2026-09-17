@@ -11,6 +11,7 @@ function makeApi(overrides: Partial<FeedsTreeApi> = {}): FeedsTreeApi {
     updateFeed: vi.fn(),
     deleteFeed: vi.fn(),
     refreshFeed: vi.fn(),
+    setFeedRenderMode: vi.fn(),
     refreshAllFeeds: vi.fn(),
     readAll: vi.fn(),
     createFolder: vi.fn(),
@@ -42,5 +43,34 @@ describe('feedsTree provider import/export', () => {
     const p = createFeedsTreeProvider(apiObj)
 
     await expect(p.exportOpmlText()).resolves.toBe(opml)
+  })
+
+  it('sets the render mode on a feed and reflects it in state', async () => {
+    const feed = { id: 7, render_mode: 0 } as Feed
+    const apiObj = makeApi({
+      listFeeds: vi.fn().mockResolvedValue([feed]),
+      setFeedRenderMode: vi.fn().mockResolvedValue({ ...feed, render_mode: 1 }),
+    })
+    const p = createFeedsTreeProvider(apiObj)
+    await p.reload()
+
+    await p.setRenderMode(7, 1)
+
+    expect(apiObj.setFeedRenderMode).toHaveBeenCalledWith(7, 1)
+    expect(p.state.feeds.find((f) => f.id === 7)?.render_mode).toBe(1)
+  })
+
+  it('persists server render mode', async () => {
+    const feed = { id: 8, render_mode: 0 } as Feed
+    const apiObj = makeApi({
+      listFeeds: vi.fn().mockResolvedValue([feed]),
+      setFeedRenderMode: vi.fn().mockResolvedValue({ ...feed, render_mode: 2 }),
+    })
+    const p = createFeedsTreeProvider(apiObj)
+    await p.reload()
+
+    await p.setRenderMode(8, 2)
+
+    expect(p.state.feeds.find((f) => f.id === 8)?.render_mode).toBe(2)
   })
 })

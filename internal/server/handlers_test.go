@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -246,6 +247,74 @@ func TestOPMLOverHTTP(t *testing.T) {
 	}
 	if !bytes.Contains(data, []byte("News")) || !bytes.Contains(data, []byte("xmlUrl")) {
 		t.Fatalf("export body missing feeds: %s", data)
+	}
+}
+
+func TestSetRenderMode(t *testing.T) {
+	ts, repo := newTestServer(t)
+	feed, _ := repo.CreateFeed(feeds.Feed{Title: "B", FeedURL: "https://b.example/rss"})
+
+	resp, body := do(t, ts, "POST", "/api/feeds/"+itoa(feed.ID)+"/render-mode", token, strings.NewReader(`{"render_mode":2}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("set render-mode: %d %s", resp.StatusCode, body)
+	}
+	if decode[feeds.Feed](t, body).RenderMode != 2 {
+		t.Fatalf("render_mode not persisted: %s", body)
+	}
+
+	// Invalid value → 400.
+	if resp, _ := do(t, ts, "POST", "/api/feeds/"+itoa(feed.ID)+"/render-mode", token, strings.NewReader(`{"render_mode":3}`)); resp.StatusCode != 400 {
+		t.Fatalf("invalid render_mode status = %d", resp.StatusCode)
+	}
+	// Missing feed → 404.
+	if resp, _ := do(t, ts, "POST", "/api/feeds/99999/render-mode", token, strings.NewReader(`{"render_mode":1}`)); resp.StatusCode != 404 {
+		t.Fatalf("missing feed status = %d", resp.StatusCode)
+	}
+}
+
+func TestRenderEndpoint(t *testing.T) {
+	ts, _ := newTestServer(t)
+
+	page := `<html><head><title>Art</title></head><body><p>Hello article</p><img src="/pic.png"></body></html>`
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/err" {
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte(page))
+	}))
+	defer upstream.Close()
+
+	// Auth required.
+	if resp, _ := do(t, ts, "GET", "/api/render?url="+url.QueryEscape(upstream.URL+"/art"), "", nil); resp.StatusCode != 401 {
+		t.Fatalf("no-token status = %d", resp.StatusCode)
+	}
+
+	resp, body := do(t, ts, "GET", "/api/render?url="+url.QueryEscape(upstream.URL+"/art"), token, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("render: %d %s", resp.StatusCode, body)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Fatalf("content-type = %q", ct)
+	}
+	if csp := resp.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "sandbox") {
+		t.Fatalf("missing sandbox CSP: %q", csp)
+	}
+	if !strings.Contains(string(body), `<base href="`+upstream.URL+`/art">`) {
+		t.Fatalf("base not injected: %s", body)
+	}
+	if !strings.Contains(string(body), "Hello article") {
+		t.Fatalf("page body missing: %s", body)
+	}
+
+	// Non-http scheme → 400.
+	if resp, _ := do(t, ts, "GET", "/api/render?url="+url.QueryEscape("file:///etc/passwd"), token, nil); resp.StatusCode != 400 {
+		t.Fatalf("bad scheme status = %d", resp.StatusCode)
+	}
+
+	// Upstream 500 → 502.
+	if resp, _ := do(t, ts, "GET", "/api/render?url="+url.QueryEscape(upstream.URL+"/err"), token, nil); resp.StatusCode != 502 {
+		t.Fatalf("upstream error status = %d", resp.StatusCode)
 	}
 }
 

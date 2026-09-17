@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { onMounted } from 'vue'
+import { onKeyStroke, useIntervalFn } from '@vueuse/core'
 import { injectFeedsTree } from '../providers/feedsTree'
 import { injectSelection } from '../providers/selection'
 import { injectItems } from '../providers/items'
-import { useAutoRefresh } from '../composables/useAutoRefresh'
-import { useKeyboard } from '../composables/useKeyboard'
 import { useApiToast } from '../api/useApiToast'
 import FeedTree from '../components/business/FeedTree.vue'
 import ArticleList from '../components/business/ArticleList.vue'
@@ -19,36 +18,20 @@ onMounted(async () => {
   try {
     await feeds.reload()
     await items.load()
-    // Reopen the article remembered from the last session. The itemId watcher
-    // below never fires for a value restored before mount, so open it directly.
+    // Reopen the article remembered from the last session. openItem is the
+    // explicit select+open action, so it also handles the item highlighting.
     if (selection.state.itemId != null) await items.openItem(selection.state.itemId).catch(() => {})
   } catch (e) {
     toast.fromError(e)
   }
 })
 
-// Load the list whenever the feed/folder selection changes.
-watch(
-  () => [selection.state.feedId, selection.state.folderId],
-  () => {
-    items.load().catch(() => {})
-  },
-)
-
-// Opening a selected item loads its detail and marks it read (optimistic).
-watch(
-  () => selection.state.itemId,
-  (id) => {
-    if (id != null) items.openItem(id).catch(() => {})
-  },
-)
-
 function move(step: number) {
   const list = items.state.items
   if (!list.length) return
   const idx = list.findIndex((i) => i.id === selection.state.itemId)
   const next = Math.min(Math.max(idx === -1 ? 0 : idx + step, 0), list.length - 1)
-  selection.selectItem(list[next].id)
+  items.openItem(list[next].id).catch(() => {})
 }
 
 function toggleRead() {
@@ -57,8 +40,17 @@ function toggleRead() {
   items.toggleRead(id).catch(() => {})
 }
 
-useKeyboard({ next: () => move(1), prev: () => move(-1), toggleRead })
-useAutoRefresh(feeds, items)
+onKeyStroke('j', () => move(1))
+onKeyStroke('k', () => move(-1))
+onKeyStroke('m', toggleRead)
+useIntervalFn(
+  () => {
+    feeds.reload().catch(() => {})
+    items.load().catch(() => {})
+  },
+  60_000,
+  { immediate: false },
+)
 </script>
 
 <template>

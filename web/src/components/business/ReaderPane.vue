@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import DOMPurify from 'dompurify'
+import { computedAsync } from '@vueuse/core'
 import { injectItems } from '../../providers/items'
 import { injectSelection } from '../../providers/selection'
 import { injectFeedsTree } from '../../providers/feedsTree'
@@ -35,31 +36,31 @@ const safeHtml = computed(() => {
   return DOMPurify.sanitize(d.content || d.summary || '')
 })
 
-const serverHtml = ref('')
-const serverError = ref('')
+// Server-mode HTML is a derived value: it re-evaluates (cancelling any stale
+// request) whenever the article or its render kind changes.
 const serverLoading = ref(false)
-
-watch(
-  () => (kind.value === 'server' ? detail.value?.url : null),
-  (url) => {
-    serverHtml.value = ''
-    serverError.value = ''
-    if (!url) return
-    loadServer(url)
+const serverError = ref<string | null>(null)
+const serverHtml = computedAsync(
+  async (onCancel) => {
+    const url = kind.value === 'server' ? detail.value?.url : null
+    serverError.value = null
+    if (!url) return ''
+    let cancelled = false
+    onCancel(() => {
+      cancelled = true
+    })
+    try {
+      const html = await api.renderUrl(url)
+      return cancelled ? '' : html
+    } catch (e) {
+      if (cancelled) return ''
+      serverError.value = e instanceof Error ? e.message : String(e)
+      return ''
+    }
   },
-  { immediate: true },
+  '',
+  { evaluating: serverLoading },
 )
-
-async function loadServer(url: string) {
-  serverLoading.value = true
-  try {
-    serverHtml.value = await api.renderUrl(url)
-  } catch (e) {
-    serverError.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    serverLoading.value = false
-  }
-}
 
 function toggleRead() {
   const id = selection.state.itemId

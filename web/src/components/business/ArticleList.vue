@@ -30,7 +30,7 @@ useIntersectionObserver(loadTrigger, ([entry]) => {
 })
 
 function select(item: Item) {
-  selection.selectItem(item.id)
+  items.openItem(item.id).catch(() => {})
 }
 
 async function setFilter(f: Filter) {

@@ -1,4 +1,4 @@
-import { inject, reactive, readonly, provide, watch } from 'vue'
+import { inject, reactive, readonly, provide } from 'vue'
 import { useLocalStorage } from '@vueuse/core'
 import { itemsKey } from './keys'
 import type { SelectionProvider } from './selection'
@@ -52,6 +52,7 @@ export interface ItemsState {
 export interface ItemsDeps {
   apiObj?: ItemsApi
   getSelection: () => { feedId: number | null; folderId: number | null }
+  selectItem?: (id: number) => void
   onItemsChanged?: () => void
 }
 
@@ -99,10 +100,6 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
   function currentScope(): ScopeKey {
     return scopeKeyOf(deps.getSelection())
   }
-  function filterForScope(): Filter {
-    const f = filters.value[currentScope()]
-    return f && FILTERS.includes(f) ? f : 'unread'
-  }
 
   const raw = reactive<ItemsState>({
     items: [],
@@ -110,18 +107,15 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
     page: 1,
     limit: 50,
     loading: false,
-    filter: filterForScope(),
+    // The active filter derives from the current scope's stored preference and is
+    // recomputed on access, so it follows feed/folder changes without an observer.
+    get filter() {
+      const f = filters.value[currentScope()]
+      return f && FILTERS.includes(f) ? f : 'unread'
+    },
     search: '',
     selectedItem: null,
   })
-
-  // Adopt the scope's remembered filter when the feed/folder selection changes.
-  watch(
-    () => [deps.getSelection().feedId, deps.getSelection().folderId],
-    () => {
-      raw.filter = filterForScope()
-    },
-  )
 
   function notify() {
     deps.onItemsChanged?.()
@@ -130,14 +124,13 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
   async function fetchPage(page: number, replace: boolean, defaultLoad = false) {
     raw.loading = true
     try {
-      const filter = filterForScope()
-      const res = await apiObj.listItems(buildItemQuery(deps.getSelection(), filter, raw.search, page, raw.limit))
+      const currentFilter = raw.filter
+      const res = await apiObj.listItems(buildItemQuery(deps.getSelection(), currentFilter, raw.search, page, raw.limit))
       // Unread is the default filter; on a default load, when nothing is unread
       // in the current scope, fall back to showing everything instead of an
       // empty list. An explicit filter choice (setFilter) is never overridden.
-      if (defaultLoad && replace && filter === 'unread' && res.total === 0) {
+      if (defaultLoad && replace && currentFilter === 'unread' && res.total === 0) {
         filters.value[currentScope()] = 'all'
-        raw.filter = 'all'
         await fetchPage(1, true)
         return
       }
@@ -184,7 +177,6 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
     },
     setFilter: async (f) => {
       filters.value[currentScope()] = f
-      raw.filter = f
       await fetchPage(1, true)
     },
     setSearch: async (s) => {
@@ -192,9 +184,11 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
       await fetchPage(1, true)
     },
     openItem: async (id) => {
+      // select + open in a single action: selecting drives the highlight/persist,
+      // then the detail is fetched and marked read optimistically.
+      deps.selectItem?.(id)
       const detail = await apiObj.getItem(id)
       raw.selectedItem = detail
-      // Mark read optimistically; the local list + unread counts refresh right away.
       patch(id, { is_read: true })
       notify()
       await apiObj.setItemState(id, 'read')
@@ -230,8 +224,12 @@ export function provideItems(deps: {
       feedId: deps.selection.state.feedId,
       folderId: deps.selection.state.folderId,
     }),
+    selectItem: deps.selection.selectItem,
     onItemsChanged: () => deps.feedsTree.reload(),
   })
+  // Reload the list whenever the feed/folder scope changes. No observer: the
+  // selection provider invokes this from its scope-changing mutators.
+  deps.selection.onScopeChange(() => provider.load().catch(() => {}))
   provide(itemsKey, provider)
   return provider
 }

@@ -35,8 +35,15 @@ export interface AuthProvider {
   probe: () => Promise<boolean>
 }
 
+export interface AuthOptions {
+  /** Called after a logout (user or 401-triggered) so the shell can navigate. */
+  onLogout?: () => void
+}
+
 // Module-scoped singleton so the router guard can read auth state before any component renders.
 const state = reactive<AuthState>({ token: readStored(), isAuthenticated: readStored() !== '' })
+
+let onLogout: (() => void) | null = null
 
 const provider: AuthProvider = {
   state: readonly(state),
@@ -49,6 +56,7 @@ const provider: AuthProvider = {
     state.token = ''
     state.isAuthenticated = false
     storeStored('')
+    onLogout?.()
   },
   probe: async () => {
     if (state.token) {
@@ -67,7 +75,8 @@ const provider: AuthProvider = {
   },
 }
 
-export function provideAuth(): AuthProvider {
+export function provideAuth(options?: AuthOptions): AuthProvider {
+  onLogout = options?.onLogout ?? null
   configureAuth({
     getToken: () => state.token || null,
     onUnauthorized: () => provider.logout(),

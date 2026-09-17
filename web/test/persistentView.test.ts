@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sanitizeSelection } from '../src/composables/usePersistentView'
+import { sanitizeSelection } from '../src/providers/selection'
 
 describe('sanitizeSelection', () => {
   it('returns safe defaults for empty input', () => {

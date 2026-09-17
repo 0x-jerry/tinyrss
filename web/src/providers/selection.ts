@@ -1,4 +1,5 @@
 import { inject, reactive, readonly, provide } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
 import { selectionKey } from './keys'
 
 export interface SelectionState {
@@ -13,33 +14,46 @@ export interface SelectionProvider {
   selectFeed: (id: number | null) => void
   selectItem: (id: number | null) => void
   clear: () => void
+  /** Subscribe to feed/folder scope changes (item-only changes do not fire). */
+  onScopeChange: (fn: () => void) => void
 }
+
+export const PERSIST_VIEW_KEY = 'tinyrss.view'
 
 const EMPTY: SelectionState = { folderId: null, feedId: null, itemId: null }
 
-export function createSelectionProvider(initial: SelectionState = EMPTY): SelectionProvider {
-  const raw = reactive<SelectionState>({ ...EMPTY, ...initial })
+// localStorage is a trust boundary: coerce malformed/legacy values to safe defaults.
+export function sanitizeSelection(v: Partial<SelectionState> | null | undefined): SelectionState {
+  const num = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n : null)
+  return {
+    folderId: num(v?.folderId),
+    feedId: num(v?.feedId),
+    itemId: num(v?.itemId),
+  }
+}
+
+const persisted = useLocalStorage<SelectionState>(PERSIST_VIEW_KEY, EMPTY)
+
+export function createSelectionProvider(initial?: SelectionState): SelectionProvider {
+  const seed = sanitizeSelection(initial ?? persisted.value)
+  const raw = reactive<SelectionState>({ ...EMPTY, ...seed })
+  let onScope: (() => void) | null = null
+
+  function commit(next: Partial<SelectionState>, scopeChanged: boolean) {
+    Object.assign(raw, next)
+    persisted.value = { ...raw }
+    if (scopeChanged) onScope?.()
+  }
 
   return {
     state: readonly(raw),
-    selectFolder: (id) => {
-      raw.folderId = id
-      raw.feedId = null
-      raw.itemId = null
+    onScopeChange: (fn) => {
+      onScope = fn
     },
-    selectFeed: (id) => {
-      raw.feedId = id
-      raw.folderId = null
-      raw.itemId = null
-    },
-    selectItem: (id) => {
-      raw.itemId = id
-    },
-    clear: () => {
-      raw.folderId = null
-      raw.feedId = null
-      raw.itemId = null
-    },
+    selectFolder: (id) => commit({ folderId: id, feedId: null, itemId: null }, true),
+    selectFeed: (id) => commit({ feedId: id, folderId: null, itemId: null }, true),
+    selectItem: (id) => commit({ itemId: id }, false),
+    clear: () => commit({ folderId: null, feedId: null, itemId: null }, true),
   }
 }
 

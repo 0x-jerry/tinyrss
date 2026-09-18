@@ -8,12 +8,12 @@ import type { Item } from '../../types/models'
 import Button from '../shared/Button.vue'
 import EmptyState from '../shared/EmptyState.vue'
 import { useApiToast } from '../../api/useApiToast'
+import { useLoading } from '../../composables/useLoading'
 
 const items = injectItems()
 const feeds = injectFeedsTree()
 const selection = injectSelection()
 const toast = useApiToast()
-const refreshing = ref(false)
 
 export interface ArticleListEmits {
   openFeeds: []
@@ -64,29 +64,26 @@ function toggleStar(item: Item) {
   items.toggleStar(item.id).catch((e) => toast.fromError(e))
 }
 
-async function markAllRead() {
+const markAllRead = useLoading(async () => {
   try {
     await items.markAllRead()
     toast.success('Marked all read')
   } catch (e) {
     toast.fromError(e)
   }
-}
+})
 
-async function refreshFeed() {
+const refreshFeed = useLoading(async () => {
   const feedId = selection.state.feedId
-  if (feedId == null || refreshing.value) return
-  refreshing.value = true
+  if (feedId == null) return
   try {
     await feeds.refreshFeed(feedId)
     await items.load()
     toast.success('Feed refreshed')
   } catch (e) {
     toast.fromError(e)
-  } finally {
-    refreshing.value = false
   }
-}
+})
 
 const hasMore = computed(() => items.state.page * items.state.limit < items.state.total)
 </script>
@@ -120,12 +117,12 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
           v-if="selection.state.feedId != null"
           variant="ghost"
           size="sm"
-          :disabled="refreshing"
+          :disabled="refreshFeed.isLoading"
           title="Refresh feed"
           class="toolbar__refresh"
           @click="refreshFeed"
         >
-          <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" :class="{ spin: refreshing }" />
+          <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" :class="{ spin: refreshFeed.isLoading }" />
         </Button>
       </div>
       <div class="toolbar__actions">
@@ -133,7 +130,7 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
           <span aria-hidden="true" class="i-lucide-search text-[14px] search__icon" />
           <input v-model="search" class="search__input" placeholder="Search…" aria-label="Search" />
         </form>
-        <Button variant="ghost" size="sm" title="Mark all read" @click="markAllRead">
+        <Button variant="ghost" size="sm" title="Mark all read" :loading="markAllRead.isLoading" @click="markAllRead">
           <span aria-hidden="true" class="i-lucide-check text-[16px]" />
         </Button>
       </div>

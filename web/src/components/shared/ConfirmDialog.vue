@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import Button from './Button.vue'
+import { useLoading } from '../../composables/useLoading'
 
 export interface ConfirmDialogProps {
   title?: string
   message?: string
   confirmText?: string
+  confirmFn?: () => Promise<void> | void
 }
 
 export interface ConfirmDialogEmits {
-  confirm: []
   cancel: []
 }
 
-withDefaults(defineProps<ConfirmDialogProps>(), {
+const props = withDefaults(defineProps<ConfirmDialogProps>(), {
   title: 'Are you sure?',
   confirmText: 'Confirm',
 })
@@ -20,7 +21,18 @@ withDefaults(defineProps<ConfirmDialogProps>(), {
 const open = defineModel<boolean>({ default: false })
 const emit = defineEmits<ConfirmDialogEmits>()
 
+const confirmAction = useLoading(async () => {
+  try {
+    await props.confirmFn?.()
+  } catch {
+    // Keep the dialog open so the action can be retried; the caller surfaces the error.
+    return
+  }
+  open.value = false
+})
+
 function close() {
+  if (confirmAction.isLoading) return
   open.value = false
   emit('cancel')
 }
@@ -34,7 +46,7 @@ function close() {
         <p v-if="message" class="dialog__msg">{{ message }}</p>
         <div class="dialog__actions">
           <Button variant="ghost" @click="close">Cancel</Button>
-          <Button variant="danger" @click="open = false; emit('confirm')">{{ confirmText }}</Button>
+          <Button variant="danger" :loading="confirmAction.isLoading" @click="confirmAction">{{ confirmText }}</Button>
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { injectFeedsTree } from '../../providers/feedsTree'
 import { injectTheme, type ThemeMode } from '../../providers/theme'
 import { useApiToast } from '../../api/useApiToast'
+import { useLoading } from '../../composables/useLoading'
 import { api } from '../../api/endpoints'
 import { ApiError } from '../../api/client'
 import type { FetchLog } from '../../types/models'
@@ -22,7 +23,6 @@ const themeOptions: { mode: ThemeMode; label: string; icon: string }[] = [
 const open = defineModel<boolean>({ default: false })
 
 const fileInput = ref<HTMLInputElement | null>(null)
-const importing = ref(false)
 
 const logs = ref<FetchLog[]>([])
 const logsLoading = ref(false)
@@ -105,9 +105,7 @@ async function onImportFile(event: Event) {
   })
 }
 
-async function importFile(file: File) {
-  if (importing.value) return
-  importing.value = true
+const importFile = useLoading(async (file: File) => {
   const form = new FormData()
   form.append('file', file)
   try {
@@ -115,17 +113,17 @@ async function importFile(file: File) {
     toast.success(`Added ${added} feed${added === 1 ? '' : 's'}`)
   } catch (e) {
     toast.fromError(e)
-  } finally {
-    importing.value = false
   }
-}
+})
 
-function exportOpml() {
-  feeds
-    .exportOpmlText()
-    .then((text) => downloadText('tinyrss-subscriptions.opml.xml', text, 'application/xml'))
-    .catch((e) => toast.fromError(e))
-}
+const exportOpml = useLoading(async () => {
+  try {
+    const text = await feeds.exportOpmlText()
+    downloadText('tinyrss-subscriptions.opml.xml', text, 'application/xml')
+  } catch (e) {
+    toast.fromError(e)
+  }
+})
 
 function downloadText(filename: string, text: string, mime: string) {
   const url = URL.createObjectURL(new Blob([text], { type: mime }))
@@ -184,7 +182,7 @@ function downloadText(filename: string, text: string, mime: string) {
           class="import-input"
           type="file"
           accept=".opml,.xml,application/xml,text/xml"
-          :disabled="importing"
+          :disabled="importFile.isLoading"
           @change="onImportFile"
         />
         <div class="action-grid">
@@ -194,7 +192,7 @@ function downloadText(filename: string, text: string, mime: string) {
               <strong>Import an OPML file</strong>
               <span>Bring subscriptions from another reader.</span>
             </div>
-            <Button class="action-card__button" variant="ghost" :disabled="importing" @click="openImport">
+            <Button class="action-card__button" variant="ghost" :loading="importFile.isLoading" @click="openImport">
               Import
             </Button>
           </div>
@@ -204,7 +202,7 @@ function downloadText(filename: string, text: string, mime: string) {
               <strong>Export your subscriptions</strong>
               <span>Download a portable OPML backup.</span>
             </div>
-            <Button class="action-card__button" variant="ghost" @click="exportOpml">Export</Button>
+            <Button class="action-card__button" variant="ghost" :loading="exportOpml.isLoading" @click="exportOpml">Export</Button>
           </div>
         </div>
       </section>

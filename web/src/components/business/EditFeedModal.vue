@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { injectFeedsTree } from '../../providers/feedsTree'
 import { useApiToast } from '../../api/useApiToast'
+import { useLoading } from '../../composables/useLoading'
 import type { Feed } from '../../types/models'
 import Modal from '../shared/Modal.vue'
 import Button from '../shared/Button.vue'
@@ -36,7 +37,7 @@ watch(
   { immediate: true },
 )
 
-async function save() {
+const save = useLoading(async () => {
   const feed = props.feed
   if (!feed || !title.value.trim() || !feedUrl.value.trim()) return
   try {
@@ -52,7 +53,7 @@ async function save() {
   } catch (e) {
     toast.fromError(e)
   }
-}
+})
 </script>
 
 <template>
@@ -85,7 +86,7 @@ async function save() {
       </label>
       <div class="actions">
         <Button variant="ghost" type="button" @click="open = false">Cancel</Button>
-        <Button variant="primary" type="submit">Save</Button>
+        <Button variant="primary" type="submit" :loading="save.isLoading">Save</Button>
       </div>
     </form>
   </Modal>

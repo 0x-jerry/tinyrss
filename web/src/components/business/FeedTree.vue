@@ -5,6 +5,7 @@ import { injectSelection } from '../../providers/selection'
 import { injectAuth } from '../../providers/auth'
 import { useApiToast } from '../../api/useApiToast'
 import { useFeedFolds } from '../../composables/useFeedFolds'
+import { useLoading } from '../../composables/useLoading'
 import type { Feed } from '../../types/models'
 import Button from '../shared/Button.vue'
 import Badge from '../shared/Badge.vue'
@@ -53,7 +54,7 @@ const filteredTree = computed(() => {
 // While searching, expand every folder so matches inside collapsed ones are visible.
 const expanded = computed(() => search.value.trim().length > 0)
 
-async function addFolder() {
+const addFolder = useLoading(async () => {
   const name = newFolderName.value.trim()
   if (!name) return
   try {
@@ -62,7 +63,7 @@ async function addFolder() {
   } catch (e) {
     toast.fromError(e)
   }
-}
+})
 
 function openEdit(feed: Feed) {
   feedToEdit.value = feed
@@ -91,11 +92,10 @@ async function doDelete() {
       await feeds.deleteFolder(target.id)
     }
     toast.success(target.kind === 'feed' ? 'Feed deleted' : 'Folder deleted')
+    pendingDelete.value = null
   } catch (e) {
     toast.fromError(e)
-  } finally {
-    pendingDelete.value = null
-    confirmOpen.value = false
+    throw e
   }
 }
 
@@ -298,7 +298,7 @@ const refreshPercent = computed(() => {
     <footer class="feeds__footer">
       <form class="add" @submit.prevent="addFolder">
         <input v-model="newFolderName" class="add__input" placeholder="New folder name" aria-label="New folder name" />
-        <Button size="sm" type="submit" title="Add folder"><span aria-hidden="true" class="i-lucide-plus text-[16px]" /></Button>
+        <Button size="sm" type="submit" title="Add folder" :loading="addFolder.isLoading"><span aria-hidden="true" class="i-lucide-plus text-[16px]" /></Button>
       </form>
       <div class="footer__bar">
         <Button variant="ghost" size="sm" class="logout" @click="auth.logout()">
@@ -319,7 +319,7 @@ const refreshPercent = computed(() => {
       title="Delete"
       :message="`Delete ${pendingDelete?.kind ?? ''} “${pendingDelete?.name ?? ''}”?`"
       confirm-text="Delete"
-      @confirm="doDelete"
+      :confirm-fn="doDelete"
     />
   </aside>
 </template>

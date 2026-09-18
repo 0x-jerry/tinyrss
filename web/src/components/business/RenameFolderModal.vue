@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { injectFeedsTree } from '../../providers/feedsTree'
 import { useApiToast } from '../../api/useApiToast'
+import { useLoading } from '../../composables/useLoading'
 import Modal from '../shared/Modal.vue'
 import Button from '../shared/Button.vue'
 
@@ -26,7 +27,7 @@ watch(
   { immediate: true },
 )
 
-async function save() {
+const save = useLoading(async () => {
   const folder = props.folder
   if (!folder) return
   const trimmed = name.value.trim()
@@ -42,7 +43,7 @@ async function save() {
   } catch (e) {
     toast.fromError(e)
   }
-}
+})
 </script>
 
 <template>
@@ -51,7 +52,7 @@ async function save() {
       <input v-model="name" class="rename__input" type="text" aria-label="Folder name" />
       <div class="actions">
         <Button variant="ghost" type="button" @click="open = false">Cancel</Button>
-        <Button variant="primary" type="submit">Save</Button>
+        <Button variant="primary" type="submit" :loading="save.isLoading">Save</Button>
       </div>
     </form>
   </Modal>

@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { injectFeedsTree } from '../../providers/feedsTree'
 import { useApiToast } from '../../api/useApiToast'
+import { useLoading } from '../../composables/useLoading'
 import Modal from '../shared/Modal.vue'
 import Button from '../shared/Button.vue'
 
@@ -13,7 +14,7 @@ const open = defineModel<boolean>({ default: false })
 const url = ref('')
 const folderId = ref<number | null>(null)
 
-async function addFeed() {
+const addFeed = useLoading(async () => {
   const feedUrl = url.value.trim()
   if (!feedUrl) return
   try {
@@ -25,7 +26,7 @@ async function addFeed() {
   } catch (e) {
     toast.fromError(e)
   }
-}
+})
 </script>
 
 <template>
@@ -46,7 +47,7 @@ async function addFeed() {
       </label>
       <div class="actions">
         <Button variant="ghost" type="button" @click="open = false">Cancel</Button>
-        <Button variant="primary" type="submit">Add feed</Button>
+        <Button variant="primary" type="submit" :loading="addFeed.isLoading">Add feed</Button>
       </div>
     </form>
   </Modal>

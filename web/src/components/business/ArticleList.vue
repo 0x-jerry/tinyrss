@@ -15,6 +15,13 @@ const selection = injectSelection()
 const toast = useApiToast()
 const refreshing = ref(false)
 
+export interface ArticleListEmits {
+  openFeeds: []
+  openReader: []
+}
+
+const emit = defineEmits<ArticleListEmits>()
+
 const ITEM_HEIGHT = 64
 const filterOptions: { value: Filter; label: string; icon: string }[] = [
   { value: 'all', label: 'All', icon: 'i-lucide-list' },
@@ -34,6 +41,7 @@ useIntersectionObserver(loadTrigger, ([entry]) => {
 
 function select(item: Item) {
   items.openItem(item.id).catch(() => {})
+  emit('openReader')
 }
 
 async function setFilter(f: Filter) {
@@ -87,6 +95,15 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   <section class="artlist">
     <header class="artlist__toolbar">
       <div class="toolbar__top">
+        <Button
+          variant="ghost"
+          size="sm"
+          title="Menu"
+          class="artlist__menu"
+          @click="emit('openFeeds')"
+        >
+          <span aria-hidden="true" class="i-lucide-menu text-[16px]" />
+        </Button>
         <div class="tabs">
           <button
             v-for="opt in filterOptions"
@@ -173,6 +190,20 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.artlist__menu {
+  display: none;
+}
+@media (max-width: 768px) {
+  .artlist__menu {
+    display: inline-flex;
+  }
+  .artlist {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    border-right: 0;
+  }
 }
 .tabs {
   display: flex;

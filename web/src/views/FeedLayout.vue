@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { onKeyStroke, useIntervalFn } from '@vueuse/core'
+import { onMounted, reactive } from 'vue'
+import { onKeyStroke, useIntervalFn, useMediaQuery } from '@vueuse/core'
 import { injectFeedsTree } from '../providers/feedsTree'
 import { injectSelection } from '../providers/selection'
 import { injectItems } from '../providers/items'
@@ -16,13 +16,22 @@ const items = injectItems()
 const toast = useApiToast()
 const { move } = useItemNav(items, selection)
 
+type MobileScreen = 'feeds' | 'list' | 'reader'
+
+const nav = reactive<{ screen: MobileScreen }>({ screen: 'list' })
+const isMobile = useMediaQuery('(max-width: 768px)')
+function goList() { nav.screen = 'list' }
+function goFeeds() { nav.screen = 'feeds' }
+function goReader() { nav.screen = 'reader' }
+
 onMounted(async () => {
   try {
+    if (isMobile.value) selection.clear()
     await feeds.reload()
     await items.load()
     // Reopen the article remembered from the last session. openItem is the
     // explicit select+open action, so it also handles the item highlighting.
-    if (selection.state.itemId != null) await items.openItem(selection.state.itemId).catch(() => {})
+    if (!isMobile.value && selection.state.itemId != null) await items.openItem(selection.state.itemId).catch(() => {})
   } catch (e) {
     toast.fromError(e)
   }
@@ -49,9 +58,23 @@ useIntervalFn(
 
 <template>
   <main class="layout">
-    <FeedTree />
-    <ArticleList />
-    <ReaderPane />
+    <FeedTree
+      class="pane"
+      :class="{ 'pane--active': nav.screen === 'feeds' }"
+      @open-list="goList"
+      @close="goList"
+    />
+    <ArticleList
+      class="pane"
+      :class="{ 'pane--active': nav.screen === 'list' }"
+      @open-feeds="goFeeds"
+      @open-reader="goReader"
+    />
+    <ReaderPane
+      class="pane"
+      :class="{ 'pane--active': nav.screen === 'reader' }"
+      @open-list="goList"
+    />
   </main>
 </template>
 
@@ -60,5 +83,10 @@ useIntervalFn(
   display: flex;
   height: 100%;
   overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  :deep(.pane) { display: none; }
+  :deep(.pane--active) { display: flex; flex-direction: column; }
 }
 </style>

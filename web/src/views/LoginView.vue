@@ -73,4 +73,8 @@ function onLogin(token: string) {
 .login__hint--muted {
   color: #9aa2b0;
 }
+@media (max-width: 768px) {
+  .login { padding: 16px; }
+  .login__card { width: 100%; max-width: 400px; padding: 20px; }
+}
 </style>

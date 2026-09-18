@@ -536,12 +536,10 @@ function downloadText(filename: string, text: string, mime: string) {
     grid-template-columns: 1fr;
   }
 }
-@media (max-width: 720px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-  .section--activity {
-    height: 260px;
-  }
+@media (max-width: 768px) {
+  .layout { flex-direction: column; }
+  .layout__left { width: 100%; }
+  .layout__right { width: 100%; }
+  .section--activity { height: 300px; }
 }
 </style>

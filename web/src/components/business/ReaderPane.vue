@@ -12,6 +12,12 @@ import { useItemNav } from '../../composables/useItemNav'
 import Button from '../shared/Button.vue'
 import EmptyState from '../shared/EmptyState.vue'
 
+export interface ReaderPaneEmits {
+  openList: []
+}
+
+const emit = defineEmits<ReaderPaneEmits>()
+
 const items = injectItems()
 const selection = injectSelection()
 const feedsTree = injectFeedsTree()
@@ -100,12 +106,17 @@ function formatDate(iso: string): string {
     <template v-if="detail">
       <header class="reader__head">
         <div class="reader__actions">
-          <Button variant="ghost" size="sm" title="Previous" @click="move(-1)">
+          <Button variant="ghost" size="sm" title="Back to list" class="reader__close" @click="emit('openList')">
             <span aria-hidden="true" class="i-lucide-chevron-left text-[16px]" />
           </Button>
-          <Button variant="ghost" size="sm" title="Next" @click="move(1)">
-            <span aria-hidden="true" class="i-lucide-chevron-right text-[16px]" />
-          </Button>
+          <div class="reader__head-nav">
+            <Button variant="ghost" size="sm" title="Previous" @click="move(-1)">
+              <span aria-hidden="true" class="i-lucide-chevron-left text-[16px]" />
+            </Button>
+            <Button variant="ghost" size="sm" title="Next" @click="move(1)">
+              <span aria-hidden="true" class="i-lucide-chevron-right text-[16px]" />
+            </Button>
+          </div>
           <Button variant="ghost" size="sm" :title="listItem?.is_read ? 'Mark unread' : 'Mark read'" @click="toggleRead">
             <span aria-hidden="true" class="i-lucide-check text-[16px]" /> {{ listItem?.is_read ? 'Unread' : 'Read' }}
           </Button>
@@ -128,6 +139,14 @@ function formatDate(iso: string): string {
           </Button>
         </div>
       </header>
+      <div class="reader__nav" role="navigation" aria-label="Article navigation">
+        <Button variant="ghost" size="sm" title="Previous article" @click="move(-1)">
+          <span aria-hidden="true" class="i-lucide-chevron-left" /> Previous
+        </Button>
+        <Button variant="ghost" size="sm" title="Next article" @click="move(1)">
+          Next <span aria-hidden="true" class="i-lucide-chevron-right" />
+        </Button>
+      </div>
       <div v-if="kind === 'server'" class="reader__frame-wrap">
         <iframe v-if="serverHtml" class="reader__frame" :srcdoc="serverHtml" sandbox="allow-scripts" title="Article" />
         <div v-else class="reader__frame-msg">{{ serverError || 'Loading…' }}</div>
@@ -239,5 +258,39 @@ function formatDate(iso: string): string {
 .reader__summary {
   color: #5b6472;
   font-size: 14px;
+}
+.reader__head-nav {
+  display: inline-flex;
+  gap: 6px;
+}
+.reader__close, .reader__nav {
+  display: none;
+}
+@media (max-width: 768px) {
+  .reader__close {
+    display: inline-flex;
+  }
+  .reader__head-nav {
+    display: none;
+  }
+  .reader__head {
+    justify-content: flex-start;
+  }
+  .reader__nav {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: #fff;
+    border-top: 1px solid #eef0f4;
+  }
+  .reader__scroll {
+    padding-bottom: 72px;
+  }
 }
 </style>

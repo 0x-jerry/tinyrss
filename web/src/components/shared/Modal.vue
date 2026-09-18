@@ -53,4 +53,9 @@ function close() {
   width: min(880px, 94vw);
   max-width: 880px;
 }
+@media (max-width: 768px) {
+  .overlay { padding: 16px; align-items: flex-start; overflow-y: auto; }
+  .dialog { min-width: 0; width: 100%; max-width: 100%; max-height: calc(100vh - 32px); overflow-y: auto; padding: 18px 16px; }
+  .dialog--wide { width: 100%; }
+}
 </style>

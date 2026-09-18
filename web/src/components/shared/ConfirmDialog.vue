@@ -73,4 +73,9 @@ function close() {
   justify-content: flex-end;
   gap: 8px;
 }
+@media (max-width: 768px) {
+  .overlay { padding: 16px; align-items: flex-start; }
+  .dialog { min-width: 0; width: 100%; max-width: 100%; max-height: calc(100vh - 32px); overflow-y: auto; }
+  .dialog__actions { flex-wrap: wrap; }
+}
 </style>

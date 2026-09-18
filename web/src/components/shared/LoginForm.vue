@@ -48,4 +48,7 @@ function onSubmit() {
   outline: 2px solid #2f6fed55;
   border-color: #2f6fed;
 }
+@media (max-width: 768px) {
+  .login-form { flex-direction: column; align-items: stretch; }
+}
 </style>

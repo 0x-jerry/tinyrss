@@ -14,6 +14,13 @@ import AddFeedModal from './AddFeedModal.vue'
 import EditFeedModal from './EditFeedModal.vue'
 import RenameFolderModal from './RenameFolderModal.vue'
 
+export interface FeedTreeEmits {
+  openList: []
+  close: []
+}
+
+const emit = defineEmits<FeedTreeEmits>()
+
 const feeds = injectFeedsTree()
 const selection = injectSelection()
 const auth = injectAuth()
@@ -93,10 +100,12 @@ async function doDelete() {
 
 function selectFolder(id: number | null) {
   selection.selectFolder(id)
+  emit('openList')
 }
 
 function selectFeed(id: number) {
   selection.selectFeed(id)
+  emit('openList')
 }
 
 function onDragStart(feed: Feed) {
@@ -158,6 +167,9 @@ const refreshPercent = computed(() => {
 <template>
   <aside class="feeds">
     <header class="feeds__header">
+      <Button variant="ghost" size="sm" title="Close menu" class="feeds__close" @click="emit('close')">
+        <span aria-hidden="true" class="i-lucide-chevron-left text-[16px]" />
+      </Button>
       <span class="brand"><span aria-hidden="true" class="i-lucide-rss text-[16px]" /> tinyrss</span>
       <div class="feeds__actions">
         <Button variant="ghost" size="sm" :disabled="feeds.state.refresh.running" title="Refresh all feeds" @click="refreshAll">
@@ -310,6 +322,20 @@ const refreshPercent = computed(() => {
   height: 100%;
   border-right: 1px solid #e3e7ee;
   background: #fafbfc;
+}
+.feeds__close {
+  display: none;
+}
+@media (max-width: 768px) {
+  .feeds__close {
+    display: inline-flex;
+  }
+  .feeds {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    border-right: 0;
+  }
 }
 .feeds__header {
   display: flex;

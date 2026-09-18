@@ -35,14 +35,14 @@ function close() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(15, 20, 30, 0.45);
+  background: var(--overlay);
 }
 .dialog {
   min-width: 320px;
   max-width: 420px;
   padding: 20px;
   border-radius: 10px;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
 }
 .dialog__title {

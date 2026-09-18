@@ -65,7 +65,7 @@ async function save() {
 }
 .rename__input {
   padding: 6px 8px;
-  border: 1px solid #d8dde6;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   font: inherit;
   font-size: 13px;

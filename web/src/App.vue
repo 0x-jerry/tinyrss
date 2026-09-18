@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { RouterView, useRouter } from 'vue-router'
-import { provideAuth, provideSelection, provideFeedsTree, provideItems } from './providers'
+import { provideAuth, provideSelection, provideFeedsTree, provideItems, provideTheme } from './providers'
 import { toastStore } from './api/useApiToast'
 
 const router = useRouter()
+
+provideTheme()
 
 // Bounce to /login whenever a logout happens (user-initiated or a 401 from the
 // api client calls provider.logout). The router guard handles initial nav.
@@ -53,13 +55,13 @@ provideItems({ selection, feedsTree })
   padding: 9px 12px;
   border-radius: 8px;
   font-size: 13px;
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
 }
 .toast--error {
-  background: #d64545;
+  background: var(--danger);
 }
 .toast--success {
-  background: #2e9e5b;
+  background: var(--success);
 }
 </style>

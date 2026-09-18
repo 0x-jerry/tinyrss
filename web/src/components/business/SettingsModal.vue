@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { injectFeedsTree } from '../../providers/feedsTree'
+import { injectTheme, type ThemeMode } from '../../providers/theme'
 import { useApiToast } from '../../api/useApiToast'
 import { api } from '../../api/endpoints'
 import { ApiError } from '../../api/client'
@@ -9,7 +10,14 @@ import Modal from '../shared/Modal.vue'
 import Button from '../shared/Button.vue'
 
 const feeds = injectFeedsTree()
+const theme = injectTheme()
 const toast = useApiToast()
+
+const themeOptions: { mode: ThemeMode; label: string; icon: string }[] = [
+  { mode: 'system', label: 'System', icon: 'i-lucide-monitor' },
+  { mode: 'light', label: 'Light', icon: 'i-lucide-sun' },
+  { mode: 'dark', label: 'Dark', icon: 'i-lucide-moon' },
+]
 
 const open = defineModel<boolean>({ default: false })
 
@@ -124,6 +132,30 @@ function downloadText(filename: string, text: string, mime: string) {
 
       <div class="layout">
         <div class="layout__left">
+          <section class="section" aria-labelledby="appearance-title">
+            <div class="section__heading">
+              <div>
+                <h4 id="appearance-title" class="section__title">Appearance</h4>
+                <p class="section__description">Choose how TinyRSS looks.</p>
+              </div>
+              <span aria-hidden="true" class="section__icon i-lucide-palette" />
+            </div>
+            <div class="theme-options">
+              <button
+                v-for="opt in themeOptions"
+                :key="opt.mode"
+                class="theme-option"
+                :class="{ 'theme-option--active': theme.state.mode === opt.mode }"
+                type="button"
+                :aria-pressed="theme.state.mode === opt.mode"
+                @click="theme.setMode(opt.mode)"
+              >
+                <span aria-hidden="true" :class="opt.icon" class="theme-option__icon" />
+                {{ opt.label }}
+              </button>
+            </div>
+          </section>
+
           <section class="section" aria-labelledby="subscriptions-title">
         <div class="section__heading">
           <div>
@@ -270,21 +302,23 @@ function downloadText(filename: string, text: string, mime: string) {
 .layout__right {
   width: 0;
   flex: 1;
+  display: flex;
+  min-width: 0;
 }
 .intro {
   display: flex;
   align-items: flex-start;
   gap: 9px;
   padding: 10px 12px;
-  border: 1px solid #dbe7ff;
+  border: 1px solid var(--accent-soft);
   border-radius: 8px;
-  background: #f5f8ff;
-  color: #4c6080;
+  background: var(--accent-soft);
+  color: var(--text-muted);
 }
 .intro__icon {
   flex: none;
   margin-top: 1px;
-  color: #2f6fed;
+  color: var(--accent);
   font-size: 16px;
 }
 .intro__copy {
@@ -294,13 +328,14 @@ function downloadText(filename: string, text: string, mime: string) {
 }
 .section {
   padding: 13px;
-  border: 1px solid #e3e7ee;
+  border: 1px solid var(--border);
   border-radius: 9px;
-  background: #fff;
+  background: var(--surface);
 }
 .section--activity {
   display: flex;
-  height: 330px;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
   padding-bottom: 8px;
 }
@@ -313,19 +348,19 @@ function downloadText(filename: string, text: string, mime: string) {
 }
 .section__title {
   margin: 0;
-  color: #2c3440;
+  color: var(--text);
   font-size: 13px;
   font-weight: 650;
 }
 .section__description {
   margin: 3px 0 0;
-  color: #7b8491;
+  color: var(--text-faint);
   font-size: 11.5px;
   line-height: 1.35;
 }
 .section__icon {
   flex: none;
-  color: #9aa4b2;
+  color: var(--text-faint);
   font-size: 17px;
 }
 .section__tools {
@@ -334,27 +369,58 @@ function downloadText(filename: string, text: string, mime: string) {
   align-items: center;
   gap: 10px;
 }
+.theme-options {
+  display: flex;
+  gap: 6px;
+}
+.theme-option {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.theme-option:hover {
+  background: var(--bg-hover);
+}
+.theme-option--active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-soft-text);
+}
+.theme-option__icon {
+  font-size: 14px;
+}
 .filter-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 4px 8px;
-  border: 1px solid #d8dde6;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: #fff;
-  color: #5b6472;
+  background: var(--surface);
+  color: var(--text-muted);
   font: inherit;
   font-size: 11.5px;
   line-height: 1;
   cursor: pointer;
 }
 .filter-btn:hover {
-  background: #f2f4f8;
+  background: var(--bg-hover);
 }
 .filter-btn--active {
-  border-color: #2f6fed;
-  background: #eef4ff;
-  color: #1f55c4;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-soft-text);
 }
 .import-input {
   display: none;
@@ -372,15 +438,15 @@ function downloadText(filename: string, text: string, mime: string) {
   gap: 7px 8px;
   min-width: 0;
   padding: 10px;
-  border: 1px solid #eef0f4;
+  border: 1px solid var(--border-subtle);
   border-radius: 7px;
-  background: #fafbfc;
+  background: var(--bg-subtle);
 }
 .action-card__icon {
   grid-row: 1 / 3;
   align-self: start;
   margin-top: 2px;
-  color: #2f6fed;
+  color: var(--accent);
   font-size: 15px;
 }
 .action-card__content {
@@ -391,12 +457,12 @@ function downloadText(filename: string, text: string, mime: string) {
   align-self: start;
 }
 .action-card__content strong {
-  color: #3c4450;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
 }
 .action-card__content span {
-  color: #7b8491;
+  color: var(--text-faint);
   font-size: 11px;
   line-height: 1.35;
 }
@@ -410,7 +476,7 @@ function downloadText(filename: string, text: string, mime: string) {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 7px 10px;
-  color: #3c4450;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 .retention__label {
@@ -424,30 +490,30 @@ function downloadText(filename: string, text: string, mime: string) {
 .retention__input {
   width: 58px;
   padding: 6px 7px;
-  border: 1px solid #cfd6e1;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: #fff;
-  color: #1c222a;
+  background: var(--surface);
+  color: var(--text);
   font: inherit;
   font-size: 12px;
   text-align: right;
 }
 .retention__input:focus {
-  border-color: #2f6fed;
-  outline: 2px solid rgba(47, 111, 237, 0.16);
+  border-color: var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 .retention__input:disabled {
-  background: #f2f4f8;
+  background: var(--bg-hover);
   cursor: wait;
   opacity: 0.65;
 }
 .retention__unit {
-  color: #5b6472;
+  color: var(--text-muted);
 }
 .retention__hint {
   grid-column: 1 / -1;
-  color: #7b8491;
+  color: var(--text-faint);
   font-size: 11px;
 }
 .state {
@@ -455,7 +521,7 @@ function downloadText(filename: string, text: string, mime: string) {
   align-items: center;
   gap: 7px;
   padding: 9px 2px 5px;
-  color: #7b8491;
+  color: var(--text-faint);
   font-size: 12px;
 }
 .state__icon {
@@ -463,7 +529,7 @@ function downloadText(filename: string, text: string, mime: string) {
   font-size: 14px;
 }
 .state--error {
-  color: #c0392b;
+  color: var(--danger);
 }
 .logs {
   flex: 1;
@@ -477,7 +543,7 @@ function downloadText(filename: string, text: string, mime: string) {
   display: flex;
   gap: 9px;
   padding: 8px 0;
-  border-bottom: 1px solid #eef0f4;
+  border-bottom: 1px solid var(--border-subtle);
 }
 .log:first-child {
   padding-top: 2px;
@@ -492,13 +558,13 @@ function downloadText(filename: string, text: string, mime: string) {
   height: 7px;
   margin-top: 4px;
   border-radius: 50%;
-  background: #e5484d;
+  background: var(--danger);
 }
 .log__dot--ok {
-  background: #2ea043;
+  background: var(--success);
 }
 .log__dot--err {
-  background: #e5484d;
+  background: var(--danger);
 }
 .log__body {
   min-width: 0;
@@ -514,19 +580,19 @@ function downloadText(filename: string, text: string, mime: string) {
 .log__feed {
   min-width: 0;
   overflow: hidden;
-  color: #3c4450;
+  color: var(--text-secondary);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .log__time {
   flex: none;
-  color: #7b8491;
+  color: var(--text-faint);
   font-size: 10.5px;
 }
 .log__error {
   margin-top: 3px;
-  color: #c0392b;
+  color: var(--danger);
   font-size: 11.5px;
   line-height: 1.35;
   overflow-wrap: anywhere;

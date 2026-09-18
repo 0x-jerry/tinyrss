@@ -40,13 +40,13 @@ function onSubmit() {
 .login-form__input {
   flex: 1;
   padding: 9px 12px;
-  border: 1px solid #d8dde6;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   font: inherit;
 }
 .login-form__input:focus {
-  outline: 2px solid #2f6fed55;
-  border-color: #2f6fed;
+  outline: 2px solid var(--accent);
+  border-color: var(--accent);
 }
 @media (max-width: 768px) {
   .login-form { flex-direction: column; align-items: stretch; }

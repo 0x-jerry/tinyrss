@@ -177,14 +177,14 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   width: 360px;
   min-width: 300px;
   height: 100%;
-  border-right: 1px solid #e3e7ee;
+  border-right: 1px solid var(--border);
 }
 .artlist__toolbar {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 8px 10px;
-  border-bottom: 1px solid #eef0f4;
+  border-bottom: 1px solid var(--border-subtle);
 }
 .toolbar__top {
   display: flex;
@@ -219,13 +219,13 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   border: 1px solid transparent;
   border-radius: 6px;
   background: none;
-  color: #5b6472;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 12px;
 }
 .tab.active {
-  background: #e3ecfd;
-  color: #1f55c4;
+  background: var(--surface-active);
+  color: var(--accent-soft-text);
 }
 .toolbar__refresh {
   flex: 0 0 auto;
@@ -240,12 +240,12 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   flex: 1;
   align-items: center;
   gap: 4px;
-  border: 1px solid #d8dde6;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 3px 6px;
 }
 .search__icon {
-  color: #9aa2b0;
+  color: var(--text-faint);
 }
 .search__input {
   flex: 1;
@@ -264,7 +264,7 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid #f2f4f8;
+  border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
   box-sizing: border-box;
 }
@@ -272,17 +272,17 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   opacity: 0.65;
 }
 .row:hover {
-  background: #f6f8fb;
+  background: var(--bg-hover);
 }
 .row.active {
-  background: #e3ecfd;
+  background: var(--surface-active);
 }
 .row__star {
   display: inline-flex;
-  color: #c3cad6;
+  color: var(--text-faint);
 }
 .row__star.starred {
-  color: #f5a623;
+  color: var(--star);
 }
 .row__body {
   flex: 1;
@@ -291,7 +291,7 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
 .row__title {
   font-size: 13px;
   font-weight: 500;
-  color: #22282f;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -299,7 +299,7 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
 .row__meta {
   margin-top: 2px;
   font-size: 11.5px;
-  color: #9aa2b0;
+  color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -311,7 +311,7 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   padding: 12px;
   text-align: center;
   font-size: 12px;
-  color: #9aa2b0;
+  color: var(--text-faint);
 }
 .spin {
   animation: refresh-spin 1s linear infinite;

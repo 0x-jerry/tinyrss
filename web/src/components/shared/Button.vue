@@ -50,28 +50,28 @@ const emit = defineEmits<ButtonEmits>()
   cursor: not-allowed;
 }
 .btn--primary {
-  background: #2f6fed;
-  color: #fff;
+  background: var(--accent);
+  color: var(--on-accent);
 }
 .btn--primary:hover:not(:disabled) {
-  background: #285fd0;
+  background: var(--accent-hover);
 }
 .btn--ghost {
   background: transparent;
-  color: #5b6472;
-  border-color: #d8dde6;
+  color: var(--text-muted);
+  border-color: var(--border-strong);
 }
 .btn--ghost:hover:not(:disabled) {
-  background: #f2f4f8;
+  background: var(--bg-hover);
 }
 .btn--danger {
   background: transparent;
-  color: #d64545;
-  border-color: #e8b4b4;
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 .btn--danger:hover:not(:disabled) {
-  background: #fdecec;
-  border-color: #f2c2c2;
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
 }
 .btn--sm {
   padding: 4px 8px;

@@ -65,11 +65,11 @@ async function addFeed() {
 }
 .field__label {
   font-size: 12px;
-  color: #5b6472;
+  color: var(--text-muted);
 }
 .field__input {
   padding: 6px 8px;
-  border: 1px solid #d8dde6;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   font: inherit;
   font-size: 13px;

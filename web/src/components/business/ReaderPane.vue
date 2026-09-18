@@ -179,30 +179,30 @@ function formatDate(iso: string): string {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--bg);
 }
 .reader__head {
   display: flex;
   justify-content: flex-end;
   padding: 10px 14px;
-  border-bottom: 1px solid #eef0f4;
+  border-bottom: 1px solid var(--border-subtle);
 }
 .reader__actions {
   display: flex;
   gap: 6px;
 }
 .reader__actions .starred {
-  color: #f5a623;
+  color: var(--star);
 }
 .reader__mode {
   height: 26px;
   padding: 0 6px;
-  border: 1px solid #d8dde6;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: #fff;
+  background: var(--surface);
   font-family: inherit;
   font-size: 12px;
-  color: #3c4450;
+  color: var(--text-secondary);
 }
 .reader__frame-wrap {
   flex: 1;
@@ -220,7 +220,7 @@ function formatDate(iso: string): string {
   height: 100%;
   padding: 24px;
   font-size: 14px;
-  color: #8a93a3;
+  color: var(--text-faint);
 }
 .reader__scroll {
   flex: 1;
@@ -231,7 +231,7 @@ function formatDate(iso: string): string {
   margin: 0 0 8px;
   font-size: 22px;
   line-height: 1.25;
-  color: #1c222a;
+  color: var(--text);
 }
 .reader__title a {
   color: inherit;
@@ -243,12 +243,12 @@ function formatDate(iso: string): string {
 .reader__meta {
   margin-bottom: 18px;
   font-size: 13px;
-  color: #8a93a3;
+  color: var(--text-faint);
 }
 .reader__content {
   font-size: 15px;
   line-height: 1.65;
-  color: #242b33;
+  color: var(--text);
   overflow-wrap: break-word;
 }
 .reader__content :deep(img) {
@@ -256,7 +256,7 @@ function formatDate(iso: string): string {
   height: auto;
 }
 .reader__summary {
-  color: #5b6472;
+  color: var(--text-muted);
   font-size: 14px;
 }
 .reader__head-nav {
@@ -286,8 +286,8 @@ function formatDate(iso: string): string {
     bottom: 0;
     z-index: 10;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
-    background: #fff;
-    border-top: 1px solid #eef0f4;
+    background: var(--bg);
+    border-top: 1px solid var(--border-subtle);
   }
   .reader__scroll {
     padding-bottom: 72px;

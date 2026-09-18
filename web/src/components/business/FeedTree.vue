@@ -320,8 +320,8 @@ const refreshPercent = computed(() => {
   width: 280px;
   min-width: 280px;
   height: 100%;
-  border-right: 1px solid #e3e7ee;
-  background: #fafbfc;
+  border-right: 1px solid var(--border);
+  background: var(--bg-subtle);
 }
 .feeds__close {
   display: none;
@@ -342,7 +342,7 @@ const refreshPercent = computed(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px;
-  border-bottom: 1px solid #eef0f4;
+  border-bottom: 1px solid var(--border-subtle);
 }
 .feeds__actions {
   display: flex;
@@ -354,7 +354,7 @@ const refreshPercent = computed(() => {
   align-items: center;
   gap: 6px;
   font-weight: 700;
-  color: #2f6fed;
+  color: var(--accent);
 }
 .add {
   display: flex;
@@ -363,24 +363,24 @@ const refreshPercent = computed(() => {
 }
 .refresh-bar {
   padding: 6px 12px;
-  border-bottom: 1px solid #eef0f4;
+  border-bottom: 1px solid var(--border-subtle);
 }
 .refresh-bar__track {
   height: 4px;
   border-radius: 2px;
-  background: #e3ecfd;
+  background: var(--accent-soft);
   overflow: hidden;
 }
 .refresh-bar__fill {
   height: 100%;
-  background: #2f6fed;
+  background: var(--accent);
   transition: width 0.2s ease;
 }
 .refresh-bar__label {
   display: block;
   margin-top: 5px;
   font-size: 12px;
-  color: #3c4450;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -389,7 +389,7 @@ const refreshPercent = computed(() => {
   flex: 1;
   min-width: 0;
   padding: 6px 8px;
-  border: 1px solid #d8dde6;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   font: inherit;
   font-size: 13px;
@@ -406,16 +406,16 @@ const refreshPercent = computed(() => {
   height: 30px;
   padding: 0 7px;
   border-radius: 6px;
-  color: #3c4450;
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 13px;
 }
 .row:hover {
-  background: #eef1f6;
+  background: var(--bg-hover);
 }
 .row.active {
-  background: #e3ecfd;
-  color: #1f55c4;
+  background: var(--surface-active);
+  color: var(--accent-soft-text);
 }
 .row--feed {
   padding-left: 22px;
@@ -434,25 +434,25 @@ const refreshPercent = computed(() => {
   display: none;
   border: 0;
   background: none;
-  color: #7b8491;
+  color: var(--text-faint);
   cursor: pointer;
   padding: 3px;
   border-radius: 5px;
   transition: background-color 0.12s ease, color 0.12s ease;
 }
 .row__act:hover {
-  background: #e3e7ee;
-  color: #1c222a;
+  background: var(--bg-hover);
+  color: var(--text);
 }
 .row__act--danger:hover {
-  background: #fdecec;
-  color: #d64545;
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 .row__act:active {
   transform: translateY(0.5px);
 }
 .row__act:focus-visible {
-  outline: 2px solid rgba(47, 111, 237, 0.5);
+  outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
 .feed__err {
@@ -460,7 +460,7 @@ const refreshPercent = computed(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #e5484d;
+  background: var(--danger);
 }
 .row:hover .row__act {
   display: inline-flex;
@@ -469,15 +469,15 @@ const refreshPercent = computed(() => {
   opacity: 0.4;
 }
 .row.drop-target {
-  outline: 1px dashed #2f6fed;
+  outline: 1px dashed var(--accent);
   outline-offset: -1px;
-  background: #eef4ff;
+  background: var(--accent-soft);
 }
 .feeds__footer {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border-top: 1px solid #eef0f4;
+  border-top: 1px solid var(--border-subtle);
 }
 .footer__bar {
   display: flex;

@@ -6,3 +6,5 @@ export { provideFeedsTree, injectFeedsTree, createFeedsTreeProvider, buildTree }
 export type { FeedsTreeProvider, FeedsTreeState, FolderNode, TreeShape } from './feedsTree'
 export { provideItems, injectItems, createItemsProvider, buildItemQuery, scopeKeyOf, parseScopeFilters } from './items'
 export type { ItemsProvider, ItemsState, ItemsDeps, Filter, ScopeKey } from './items'
+export { provideTheme, injectTheme, sanitizeTheme } from './theme'
+export type { ThemeProvider, ThemeState, ThemeMode, ResolvedTheme } from './theme'

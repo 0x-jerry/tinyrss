@@ -4,6 +4,24 @@
     <meta charset="UTF-8" />
     <link rel="icon" href="data:," />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Resolve the saved theme mode before first paint so there is no flash
+      // of the wrong theme. Mirrors src/providers/theme.ts.
+      (function () {
+        var mode = 'system'
+        try {
+          var stored = localStorage.getItem('tinyrss.theme')
+          if (stored === 'light' || stored === 'dark' || stored === 'system') mode = stored
+        } catch (e) {}
+        var resolved =
+          mode === 'system'
+            ? window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+            : mode
+        document.documentElement.setAttribute('data-theme', resolved)
+      })()
+    </script>
     <title>tinyrss</title>
   </head>
   <body>

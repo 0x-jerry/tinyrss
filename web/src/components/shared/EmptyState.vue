@@ -25,7 +25,7 @@ withDefaults(defineProps<EmptyStateProps>(), { icon: 'i-lucide-rss' })
   height: 100%;
   padding: 24px;
   text-align: center;
-  color: #8a93a3;
+  color: var(--text-faint);
 }
 .empty__icon {
   font-size: 28px;

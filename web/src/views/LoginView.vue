@@ -46,13 +46,13 @@ function onLogin(token: string) {
   align-items: center;
   justify-content: center;
   height: 100%;
-  background: #f3f5f9;
+  background: var(--bg-subtle);
 }
 .login__card {
   width: 380px;
   padding: 28px;
   border-radius: 12px;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 8px 30px rgba(20, 30, 50, 0.12);
 }
 .login__brand {
@@ -61,17 +61,17 @@ function onLogin(token: string) {
   gap: 6px;
   font-size: 18px;
   font-weight: 700;
-  color: #2f6fed;
+  color: var(--accent);
   margin-bottom: 14px;
 }
 .login__hint {
   margin: 0 0 16px;
-  color: #5b6472;
+  color: var(--text-muted);
   font-size: 13.5px;
   line-height: 1.5;
 }
 .login__hint--muted {
-  color: #9aa2b0;
+  color: var(--text-faint);
 }
 @media (max-width: 768px) {
   .login { padding: 16px; }

@@ -304,6 +304,7 @@ function downloadText(filename: string, text: string, mime: string) {
   flex: 1;
   display: flex;
   min-width: 0;
+  height: 440px;
 }
 .intro {
   display: flex;
@@ -335,6 +336,7 @@ function downloadText(filename: string, text: string, mime: string) {
 .section--activity {
   display: flex;
   flex: 1;
+  width: 100%;
   min-height: 0;
   flex-direction: column;
   padding-bottom: 8px;

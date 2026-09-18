@@ -30,7 +30,7 @@ function onLogin(token: string) {
 <template>
   <main class="login">
     <div class="login__card">
-      <div class="login__brand"><span aria-hidden="true" class="i-lucide-rss text-[22px]" /> tinyrss</div>
+      <div class="login__brand"><span aria-hidden="true" class="i-lucide-rss text-[22px]" /> TinyRSS</div>
       <p class="login__hint">
         This instance is protected by an access token. Paste it below to sign in.
       </p>

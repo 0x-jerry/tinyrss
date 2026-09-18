@@ -5,6 +5,7 @@ import { injectFeedsTree } from '../providers/feedsTree'
 import { injectSelection } from '../providers/selection'
 import { injectItems } from '../providers/items'
 import { useApiToast } from '../api/useApiToast'
+import { useItemNav } from '../composables/useItemNav'
 import FeedTree from '../components/business/FeedTree.vue'
 import ArticleList from '../components/business/ArticleList.vue'
 import ReaderPane from '../components/business/ReaderPane.vue'
@@ -13,6 +14,7 @@ const feeds = injectFeedsTree()
 const selection = injectSelection()
 const items = injectItems()
 const toast = useApiToast()
+const { move } = useItemNav(items, selection)
 
 onMounted(async () => {
   try {
@@ -25,14 +27,6 @@ onMounted(async () => {
     toast.fromError(e)
   }
 })
-
-function move(step: number) {
-  const list = items.state.items
-  if (!list.length) return
-  const idx = list.findIndex((i) => i.id === selection.state.itemId)
-  const next = Math.min(Math.max(idx === -1 ? 0 : idx + step, 0), list.length - 1)
-  items.openItem(list[next].id).catch(() => {})
-}
 
 function toggleRead() {
   const id = selection.state.itemId

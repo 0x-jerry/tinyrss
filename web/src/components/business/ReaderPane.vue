@@ -8,6 +8,7 @@ import { injectFeedsTree } from '../../providers/feedsTree'
 import { useApiToast } from '../../api/useApiToast'
 import { api } from '../../api/endpoints'
 import { renderKind } from '../../renderMode'
+import { useItemNav } from '../../composables/useItemNav'
 import Button from '../shared/Button.vue'
 import EmptyState from '../shared/EmptyState.vue'
 
@@ -15,6 +16,7 @@ const items = injectItems()
 const selection = injectSelection()
 const feedsTree = injectFeedsTree()
 const toast = useApiToast()
+const { move } = useItemNav(items, selection)
 
 const detail = computed(() => items.state.selectedItem)
 
@@ -98,6 +100,12 @@ function formatDate(iso: string): string {
     <template v-if="detail">
       <header class="reader__head">
         <div class="reader__actions">
+          <Button variant="ghost" size="sm" title="Previous" @click="move(-1)">
+            <span aria-hidden="true" class="i-lucide-chevron-left text-[16px]" />
+          </Button>
+          <Button variant="ghost" size="sm" title="Next" @click="move(1)">
+            <span aria-hidden="true" class="i-lucide-chevron-right text-[16px]" />
+          </Button>
           <Button variant="ghost" size="sm" :title="listItem?.is_read ? 'Mark unread' : 'Mark read'" @click="toggleRead">
             <span aria-hidden="true" class="i-lucide-check text-[16px]" /> {{ listItem?.is_read ? 'Unread' : 'Read' }}
           </Button>

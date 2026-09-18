@@ -8,6 +8,7 @@ import { injectFeedsTree } from '../../providers/feedsTree'
 import { useApiToast } from '../../api/useApiToast'
 import { api } from '../../api/endpoints'
 import { renderKind } from '../../renderMode'
+import { buildContentDocument } from '../../contentDoc'
 import { useItemNav } from '../../composables/useItemNav'
 import Button from '../shared/Button.vue'
 import EmptyState from '../shared/EmptyState.vue'
@@ -37,11 +38,17 @@ const feed = computed(() => {
 })
 const kind = computed(() => renderKind(feed.value?.render_mode ?? 0, detail.value?.url ?? null))
 
-// Feeds render ONLY through DOMPurify before v-html; everything else is Vue-escaped.
+// Feed content is ONLY ever rendered DOMPurify-sanitized; everything else is Vue-escaped.
 const safeHtml = computed(() => {
   const d = detail.value
   if (!d) return ''
   return DOMPurify.sanitize(d.content || d.summary || '')
+})
+
+// Content mode renders the sanitized body inside an isolated iframe srcdoc.
+const contentDoc = computed(() => {
+  const html = safeHtml.value
+  return html ? buildContentDocument(html) : ''
 })
 
 // Server-mode HTML is a derived value: it re-evaluates (cancelling any stale
@@ -92,12 +99,6 @@ function openUrl() {
   const url = detail.value?.url
   if (!url) return
   window.open(url, '_blank', 'noopener,noreferrer')
-}
-
-function formatDate(iso: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString()
 }
 </script>
 
@@ -154,18 +155,9 @@ function formatDate(iso: string): string {
       <div v-else-if="kind === 'iframe'" class="reader__frame-wrap">
         <iframe class="reader__frame" :src="detail.url" :title="detail.title" />
       </div>
-      <div v-else class="reader__scroll">
-        <h1 class="reader__title">
-          <a v-if="detail.url" :href="detail.url" target="_blank" rel="noopener noreferrer">{{ detail.title }}</a>
-          <template v-else>{{ detail.title }}</template>
-        </h1>
-        <div class="reader__meta">
-          <span v-if="detail.feed_title">{{ detail.feed_title }}</span>
-          <span v-if="detail.author"> · {{ detail.author }}</span>
-          <span v-if="detail.published_at"> · {{ formatDate(detail.published_at) }}</span>
-        </div>
-        <article v-if="safeHtml" class="reader__content" v-html="safeHtml"></article>
-        <p v-else class="reader__summary">{{ detail.summary }}</p>
+      <div v-else class="reader__frame-wrap">
+        <iframe v-if="contentDoc" class="reader__frame" :srcdoc="contentDoc" sandbox="" title="Article" />
+        <div v-else class="reader__frame-msg">No content for this article.</div>
       </div>
     </template>
     <EmptyState v-else message="Select an article to read it." icon="i-lucide-filter" />
@@ -222,43 +214,6 @@ function formatDate(iso: string): string {
   font-size: 14px;
   color: var(--text-faint);
 }
-.reader__scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 28px 48px;
-}
-.reader__title {
-  margin: 0 0 8px;
-  font-size: 22px;
-  line-height: 1.25;
-  color: var(--text);
-}
-.reader__title a {
-  color: inherit;
-  text-decoration: none;
-}
-.reader__title a:hover {
-  text-decoration: underline;
-}
-.reader__meta {
-  margin-bottom: 18px;
-  font-size: 13px;
-  color: var(--text-faint);
-}
-.reader__content {
-  font-size: 15px;
-  line-height: 1.65;
-  color: var(--text);
-  overflow-wrap: break-word;
-}
-.reader__content :deep(img) {
-  max-width: 100%;
-  height: auto;
-}
-.reader__summary {
-  color: var(--text-muted);
-  font-size: 14px;
-}
 .reader__head-nav {
   display: inline-flex;
   gap: 6px;
@@ -288,9 +243,6 @@ function formatDate(iso: string): string {
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
     background: var(--bg);
     border-top: 1px solid var(--border-subtle);
-  }
-  .reader__scroll {
-    padding-bottom: 72px;
   }
 }
 </style>

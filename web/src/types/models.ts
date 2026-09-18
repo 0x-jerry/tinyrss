@@ -60,7 +60,13 @@ export interface ReadAllResult {
 }
 
 export interface RefreshResult {
-  refreshed: number
+  running: boolean
+  total: number
+  done: number
+  failed: number
+  new_items: number
+  current_feed_id: number
+  current_feed_title: string
 }
 
 export interface Stats {

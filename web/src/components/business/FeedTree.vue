@@ -23,7 +23,6 @@ const { uncategorizedCollapsed, isCollapsed, toggleFolder, toggleUncategorized }
 const newFolderName = ref('')
 const confirmOpen = ref(false)
 const pendingDelete = ref<{ kind: 'feed' | 'folder'; id: number; name: string } | null>(null)
-const refreshing = ref(false)
 const draggingFeedId = ref<number | null>(null)
 const dropTarget = ref<{ folderId: number | null } | null>(null)
 const settingsOpen = ref(false)
@@ -140,17 +139,20 @@ function uncategorizedFolderTitle(): string {
 }
 
 async function refreshAll() {
-  if (refreshing.value) return
-  refreshing.value = true
+  if (feeds.state.refresh.running) return
   try {
     await feeds.refreshAll()
-    toast.success('Feeds refreshed')
+    const { failed } = feeds.state.refresh
+    toast.success(failed > 0 ? `Feeds refreshed (${failed} failed)` : 'Feeds refreshed')
   } catch (e) {
     toast.fromError(e)
-  } finally {
-    refreshing.value = false
   }
 }
+
+const refreshPercent = computed(() => {
+  const { total, done } = feeds.state.refresh
+  return total > 0 ? Math.round((done / total) * 100) : 0
+})
 </script>
 
 <template>
@@ -158,11 +160,22 @@ async function refreshAll() {
     <header class="feeds__header">
       <span class="brand"><span aria-hidden="true" class="i-lucide-rss text-[16px]" /> tinyrss</span>
       <div class="feeds__actions">
-        <Button variant="ghost" size="sm" :disabled="refreshing" title="Refresh all feeds" @click="refreshAll">
-          <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" :class="{ spin: refreshing }" />
+        <Button variant="ghost" size="sm" :disabled="feeds.state.refresh.running" title="Refresh all feeds" @click="refreshAll">
+          <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" :class="{ spin: feeds.state.refresh.running }" />
         </Button>
       </div>
     </header>
+
+    <div v-if="feeds.state.refresh.running" class="refresh-bar" role="progressbar"
+      aria-valuemin="0" aria-valuemax="100" :aria-valuenow="refreshPercent">
+      <div class="refresh-bar__track">
+        <div class="refresh-bar__fill" :style="{ width: refreshPercent + '%' }" />
+      </div>
+      <span class="refresh-bar__label">
+        Refreshing {{ feeds.state.refresh.done }}/{{ feeds.state.refresh.total
+        }}<template v-if="feeds.state.refresh.currentTitle"> · {{ feeds.state.refresh.currentTitle }}</template>
+      </span>
+    </div>
 
     <div class="add">
       <input v-model="search" class="add__input" placeholder="Search feeds by name" aria-label="Search feeds" />
@@ -319,6 +332,30 @@ async function refreshAll() {
   display: flex;
   gap: 6px;
   padding: 8px 12px;
+}
+.refresh-bar {
+  padding: 6px 12px;
+  border-bottom: 1px solid #eef0f4;
+}
+.refresh-bar__track {
+  height: 4px;
+  border-radius: 2px;
+  background: #e3ecfd;
+  overflow: hidden;
+}
+.refresh-bar__fill {
+  height: 100%;
+  background: #2f6fed;
+  transition: width 0.2s ease;
+}
+.refresh-bar__label {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #3c4450;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .add__input {
   flex: 1;

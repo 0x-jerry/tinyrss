@@ -53,6 +53,7 @@ export const api = {
 
   // System
   refreshAllFeeds: () => request<RefreshResult>('POST', '/api/refresh'),
+  refreshProgress: () => request<RefreshResult>('GET', '/api/refresh/progress'),
   health: () => request<Health>('GET', '/api/health'),
   stats: () => request<Stats>('GET', '/api/stats'),
   importOpml: (form: FormData) => request<OpmlImportResult>('POST', '/api/opml/import', form),

@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestFetcherConditionalGETAndNewItems(t *testing.T) {
@@ -88,5 +89,77 @@ func TestFetcherRecordsErrorKeepsFeedAlive(t *testing.T) {
 	}
 	if feed.LastFetchedAt == "" {
 		t.Error("last_fetched_at should be touched so retry cadence is known")
+	}
+}
+
+// waitIdle polls Progress until the refresh-all job is no longer running.
+func waitIdle(t *testing.T, f *Fetcher) RefreshJob {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		job := f.Progress()
+		if !job.Running {
+			return job
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("refresh-all job did not finish in time")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestRefreshAllGapSkipsRecentFeeds(t *testing.T) {
+	var mu sync.Mutex
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests++
+		mu.Unlock()
+		_, _ = w.Write([]byte(rssXML))
+	}))
+	defer srv.Close()
+
+	repo := newTestRepo(t)
+	fetcher := NewFetcher(repo)
+	feed, err := repo.CreateFeed(Feed{Title: "F", FeedURL: srv.URL + "/feed.xml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A fetch within minRefreshGap means a manual refresh-all skips it.
+	if _, err := fetcher.RefreshFeed(feed.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := fetcher.RefreshAllAsync(); err != nil {
+		t.Fatal(err)
+	}
+	job := waitIdle(t, fetcher)
+	if job.Total != 1 || job.Done != 1 || job.Failed != 0 {
+		t.Fatalf("job = %+v, want total=1 done=1 failed=0", job)
+	}
+	mu.Lock()
+	got := requests
+	mu.Unlock()
+	if got != 1 {
+		t.Fatalf("requests = %d, want 1 (recent feed skipped by gap)", got)
+	}
+
+	// Backdating last_fetched_at beyond the gap lets the next run fetch again.
+	if _, err := repo.DB.Exec(`UPDATE feeds SET last_fetched_at = ? WHERE id = ?`,
+		time.Now().Add(-2*minRefreshGap).Format(time.RFC3339), feed.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := fetcher.RefreshAllAsync(); err != nil {
+		t.Fatal(err)
+	}
+	job = waitIdle(t, fetcher)
+	if job.Done != 1 {
+		t.Fatalf("job = %+v, want done=1", job)
+	}
+	mu.Lock()
+	got = requests
+	mu.Unlock()
+	if got != 2 {
+		t.Fatalf("requests = %d, want 2 (aged feed refreshed)", got)
 	}
 }

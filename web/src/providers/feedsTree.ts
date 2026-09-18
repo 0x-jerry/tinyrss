@@ -1,7 +1,7 @@
 import { inject, reactive, readonly, provide, type DeepReadonly } from 'vue'
 import { feedsTreeKey } from './keys'
 import { api } from '../api/endpoints'
-import type { Feed, Folder } from '../types/models'
+import type { Feed, Folder, RefreshResult } from '../types/models'
 
 export interface FolderNode {
   id: number
@@ -51,11 +51,21 @@ export interface UpdateFeedPatch {
   folder_id?: number | null
 }
 
+export interface RefreshState {
+  running: boolean
+  total: number
+  done: number
+  failed: number
+  newItems: number
+  currentTitle: string
+}
+
 export interface FeedsTreeState {
   feeds: Feed[]
   folders: Folder[]
   tree: TreeShape
   loading: boolean
+  refresh: RefreshState
 }
 
 export interface FeedsTreeProvider {
@@ -88,12 +98,24 @@ export function createFeedsTreeProvider(): FeedsTreeProvider {
       totalUnread: 0,
     },
     loading: false,
+    refresh: { running: false, total: 0, done: 0, failed: 0, newItems: 0, currentTitle: '' },
   })
 
   function apply(feeds: Feed[], folders: Folder[]) {
     raw.feeds = feeds
     raw.folders = folders
     raw.tree = buildTree(feeds, folders)
+  }
+
+  function applyRefresh(r: RefreshResult) {
+    raw.refresh = {
+      running: r.running,
+      total: r.total,
+      done: r.done,
+      failed: r.failed,
+      newItems: r.new_items,
+      currentTitle: r.current_feed_title,
+    }
   }
 
   async function reload() {
@@ -141,6 +163,13 @@ export function createFeedsTreeProvider(): FeedsTreeProvider {
     },
     refreshAll: async () => {
       await api.refreshAllFeeds()
+      // Poll the background job until it finishes, then reload the tree.
+      for (;;) {
+        const job = await api.refreshProgress()
+        applyRefresh(job)
+        if (!job.running) break
+        await sleep(500)
+      }
       await reload()
     },
     refreshFeed: async (id) => {
@@ -169,6 +198,10 @@ export function provideFeedsTree(): FeedsTreeProvider {
   const p = createFeedsTreeProvider()
   provide(feedsTreeKey, p)
   return p
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export function injectFeedsTree(): FeedsTreeProvider {

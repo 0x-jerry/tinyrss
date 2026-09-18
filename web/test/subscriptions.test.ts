@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createFeedsTreeProvider } from '../src/providers/feedsTree'
 import { api } from '../src/api/endpoints'
-import type { Feed, Folder } from '../src/types/models'
+import type { Feed, Folder, RefreshResult } from '../src/types/models'
 
 vi.mock('../src/api/endpoints', () => ({
   api: {
@@ -13,6 +13,7 @@ vi.mock('../src/api/endpoints', () => ({
     refreshFeed: vi.fn(),
     setFeedRenderMode: vi.fn(),
     refreshAllFeeds: vi.fn(),
+    refreshProgress: vi.fn(),
     readAll: vi.fn(),
     createFolder: vi.fn(),
     updateFolder: vi.fn(),
@@ -105,5 +106,40 @@ describe('feedsTree provider import/export', () => {
     await provider.setRenderMode(8, 2)
 
     expect(provider.state.feeds.find((f) => f.id === 8)?.render_mode).toBe(2)
+  })
+
+  it('polls refresh progress until idle then reloads', async () => {
+    const running: RefreshResult = {
+      running: true,
+      total: 2,
+      done: 1,
+      failed: 0,
+      new_items: 0,
+      current_feed_id: 1,
+      current_feed_title: 'A',
+    }
+    const idle: RefreshResult = {
+      running: false,
+      total: 2,
+      done: 2,
+      failed: 0,
+      new_items: 3,
+      current_feed_id: 0,
+      current_feed_title: '',
+    }
+    vi.mocked(api.refreshAllFeeds).mockResolvedValue(running)
+    vi.mocked(api.refreshProgress)
+      .mockResolvedValueOnce(running)
+      .mockResolvedValueOnce(idle)
+    withFeedsTree([] as Feed[])
+
+    const provider = createFeedsTreeProvider()
+    await provider.refreshAll()
+
+    expect(api.refreshAllFeeds).toHaveBeenCalled()
+    expect(api.refreshProgress).toHaveBeenCalledTimes(2)
+    // reload() pulls feeds+folders once the job is idle.
+    expect(api.listFeeds).toHaveBeenCalled()
+    expect(provider.state.refresh).toMatchObject({ running: false, total: 2, done: 2, failed: 0 })
   })
 })

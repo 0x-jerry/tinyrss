@@ -18,7 +18,25 @@ const (
 	maxBodySize = 32 << 20 // cap fetched body: a runaway feed can't OOM us
 	workerCount = 4
 	userAgent   = "tinyrss/1.0"
+
+	// minRefreshGap throttles a manual refresh-all so feeds fetched within this
+	// window are skipped — a fixed ceiling keeps hammering the button from
+	// re-hitting recently fetched feeds. Make configurable only if needed.
+	minRefreshGap = 10 * time.Minute
 )
+
+// RefreshJob is a point-in-time snapshot of the background refresh-all job.
+// Total counts every feed considered (including ones skipped by minRefreshGap);
+// Done counts processed (success + failed).
+type RefreshJob struct {
+	Running      bool   `json:"running"`
+	Total        int    `json:"total"`
+	Done         int    `json:"done"`
+	Failed       int    `json:"failed"`
+	NewItems     int    `json:"new_items"`
+	CurrentID    int    `json:"current_feed_id"`
+	CurrentTitle string `json:"current_feed_title"`
+}
 
 // Fetcher pulls feeds with conditional GET, dedupes concurrent refreshes per
 // feed via singleflight, and runs a ticker that refreshes due feeds with a
@@ -31,6 +49,8 @@ type Fetcher struct {
 	stopCh  chan struct{}
 	stopWg  sync.WaitGroup
 	refreshWg sync.WaitGroup
+	jobMu   sync.Mutex
+	job     RefreshJob
 }
 
 func NewFetcher(repo *Repo) *Fetcher {
@@ -78,6 +98,24 @@ func (f *Fetcher) Stop() {
 	f.refreshWg.Wait()
 }
 
+// lastFetched parses a feed's recorded fetch time; zero means never fetched.
+// Reading a DATETIME column through the sqlite driver yields RFC3339; older
+// rows may hold "2006-01-02 15:04:05". Both are UTC instants, so parse and
+// compare against the now-based cutoff regardless of the local timezone.
+func lastFetched(fd Feed) time.Time {
+	s := fd.LastFetchedAt
+	if s == "" {
+		return time.Time{}
+	}
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t
+	}
+	if t, err := time.ParseInLocation(TimeLayout, s, time.UTC); err == nil {
+		return t
+	}
+	return time.Time{}
+}
+
 // refreshDue refreshes every feed that has never been fetched or was last
 // fetched more than interval ago, with a bounded worker pool.
 func (f *Fetcher) refreshDue(interval time.Duration) {
@@ -88,12 +126,7 @@ func (f *Fetcher) refreshDue(interval time.Duration) {
 	cutoff := time.Now().Add(-interval)
 	due := make([]int, 0, len(feeds))
 	for _, fd := range feeds {
-		var last time.Time
-		if fd.LastFetchedAt != "" {
-			if t, err := time.ParseInLocation(TimeLayout, fd.LastFetchedAt, time.Local); err == nil {
-				last = t
-			}
-		}
+		last := lastFetched(fd)
 		if last.IsZero() || last.Before(cutoff) {
 			due = append(due, fd.ID)
 		}
@@ -125,30 +158,85 @@ func (f *Fetcher) RefreshFeed(id int) (int, error) {
 	return v.(int), nil
 }
 
-// RefreshAll refreshes every feed, returning how many refreshed without error.
-func (f *Fetcher) RefreshAll() int {
+// RefreshAllAsync kicks off a background refresh-all and returns immediately.
+// Feeds fetched within minRefreshGap are skipped so repeated clicks don't
+// re-hit them. Progress is observable via Progress. It is a no-op (nil) when a
+// refresh is already running, so the caller can keep polling the active job.
+func (f *Fetcher) RefreshAllAsync() error {
+	f.jobMu.Lock()
+	if f.job.Running {
+		f.jobMu.Unlock()
+		return nil
+	}
+	f.jobMu.Unlock()
+
 	feeds, err := f.repo.ListFeeds()
 	if err != nil {
-		return 0
+		return err
 	}
-	var mu sync.Mutex
-	var ok int
+
+	f.jobMu.Lock()
+	f.job = RefreshJob{Running: true, Total: len(feeds)}
+	f.jobMu.Unlock()
+
+	f.refreshWg.Add(1)
+	go f.runRefreshAll(feeds)
+	return nil
+}
+
+func (f *Fetcher) runRefreshAll(feeds []Feed) {
+	defer f.refreshWg.Done()
+	defer func() {
+		f.jobMu.Lock()
+		f.job.Running = false
+		f.job.CurrentID = 0
+		f.job.CurrentTitle = ""
+		f.jobMu.Unlock()
+	}()
+
+	cutoff := time.Now().Add(-minRefreshGap)
 	var wg sync.WaitGroup
 	for _, fd := range feeds {
+		f.setCurrent(fd)
+		if last := lastFetched(fd); !last.IsZero() && !last.Before(cutoff) {
+			f.markDone(0, nil)
+			continue
+		}
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
 			f.sem <- struct{}{}
 			defer func() { <-f.sem }()
-			if _, err := f.RefreshFeed(id); err == nil {
-				mu.Lock()
-				ok++
-				mu.Unlock()
-			}
+			newItems, err := f.RefreshFeed(id)
+			f.markDone(newItems, err)
 		}(fd.ID)
 	}
 	wg.Wait()
-	return ok
+}
+
+func (f *Fetcher) setCurrent(fd Feed) {
+	f.jobMu.Lock()
+	f.job.CurrentID = fd.ID
+	f.job.CurrentTitle = fd.Title
+	f.jobMu.Unlock()
+}
+
+func (f *Fetcher) markDone(newItems int, err error) {
+	f.jobMu.Lock()
+	defer f.jobMu.Unlock()
+	f.job.Done++
+	if err != nil {
+		f.job.Failed++
+		return
+	}
+	f.job.NewItems += newItems
+}
+
+// Progress returns a snapshot of the in-flight or last refresh-all job.
+func (f *Fetcher) Progress() RefreshJob {
+	f.jobMu.Lock()
+	defer f.jobMu.Unlock()
+	return f.job
 }
 
 // Probe downloads and parses a feed URL with no stored etag — used when adding

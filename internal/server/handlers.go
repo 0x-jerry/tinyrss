@@ -42,6 +42,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("POST /api/refresh", s.handleRefreshAll)
+	mux.HandleFunc("GET /api/refresh/progress", s.handleRefreshProgress)
 	mux.HandleFunc("GET /api/stats", s.handleStats)
 }
 
@@ -413,8 +414,15 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRefreshAll(w http.ResponseWriter, r *http.Request) {
-	refreshed := s.fetcher.RefreshAll()
-	writeJSON(w, http.StatusOK, map[string]any{"refreshed": refreshed})
+	if err := s.fetcher.RefreshAllAsync(); err != nil {
+		s.serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.fetcher.Progress())
+}
+
+func (s *Server) handleRefreshProgress(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.fetcher.Progress())
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {

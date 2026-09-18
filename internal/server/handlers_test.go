@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"tinyrss/internal/feeds"
 	"tinyrss/internal/store"
@@ -394,6 +395,40 @@ func TestRenderEndpoint(t *testing.T) {
 	// Upstream 500 → 502.
 	if resp, _ := do(t, ts, "GET", "/api/render?url="+url.QueryEscape(upstream.URL+"/err"), token, nil); resp.StatusCode != 502 {
 		t.Fatalf("upstream error status = %d", resp.StatusCode)
+	}
+}
+
+func TestRefreshAllProgressEndpoints(t *testing.T) {
+	ts, repo := newTestServer(t)
+	feedSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(testRSS))
+	}))
+	defer feedSrv.Close()
+	if _, err := repo.CreateFeed(feeds.Feed{Title: "F", FeedURL: feedSrv.URL + "/feed"}); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, body := do(t, ts, "POST", "/api/refresh", token, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("POST /api/refresh status = %d, body=%s", resp.StatusCode, body)
+	}
+	_ = decode[feeds.RefreshJob](t, body)
+
+	// Poll until the job finishes; progress then reports the completed job.
+	var job feeds.RefreshJob
+	for i := 0; i < 200; i++ {
+		resp, body = do(t, ts, "GET", "/api/refresh/progress", token, nil)
+		if resp.StatusCode != 200 {
+			t.Fatalf("progress status = %d", resp.StatusCode)
+		}
+		job = decode[feeds.RefreshJob](t, body)
+		if !job.Running {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if job.Total != 1 || job.Done != 1 || job.Failed != 0 {
+		t.Fatalf("job = %+v, want total=1 done=1 failed=0", job)
 	}
 }
 

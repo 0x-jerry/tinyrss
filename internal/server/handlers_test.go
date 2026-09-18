@@ -185,6 +185,85 @@ func TestFeedLifecycleAndItems(t *testing.T) {
 	if decode[feeds.Feed](t, body).Unread != 0 {
 		t.Fatalf("unread after read: %s", body)
 	}
+
+	// Creating a feed with a folder_id attaches it to that group.
+	resp, body = do(t, ts, "POST", "/api/feeds", token, strings.NewReader(
+		`{"feed_url":"`+feedSrv.URL+`/feed2","folder_id":`+itoa(folder.ID)+`}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("create feed in folder: %d %s", resp.StatusCode, body)
+	}
+	folderFeed := decode[feeds.Feed](t, body)
+	if folderFeed.FolderID == nil || *folderFeed.FolderID != folder.ID {
+		t.Fatalf("feed folder_id = %v, want %d", folderFeed.FolderID, folder.ID)
+	}
+}
+
+func TestUpdateFeed(t *testing.T) {
+	ts, _ := newTestServer(t)
+	feedSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = w.Write([]byte(testRSS))
+	}))
+	defer feedSrv.Close()
+
+	// Create a feed and a folder to attach it to.
+	resp, body := do(t, ts, "POST", "/api/feeds", token, strings.NewReader(`{"feed_url":"`+feedSrv.URL+`/feed"}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("create feed: %d %s", resp.StatusCode, body)
+	}
+	feed := decode[feeds.Feed](t, body)
+
+	resp, body = do(t, ts, "POST", "/api/folders", token, strings.NewReader(`{"name":"Down"}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("create folder: %d %s", resp.StatusCode, body)
+	}
+	folder := decode[feeds.Folder](t, body)
+
+	// Update title, site_url, description and group while keeping the URL.
+	resp, body = do(t, ts, "PUT", "/api/feeds/"+itoa(feed.ID), token, strings.NewReader(
+		`{"title":"Renamed","site_url":"https://news.example/","description":"new desc","folder_id":`+itoa(folder.ID)+`}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("update feed: %d %s", resp.StatusCode, body)
+	}
+	updated := decode[feeds.Feed](t, body)
+	if updated.Title != "Renamed" || updated.SiteURL != "https://news.example/" ||
+		updated.Description != "new desc" || updated.FolderID == nil || *updated.FolderID != folder.ID {
+		t.Fatalf("unexpected updated feed %+v", updated)
+	}
+
+	// Change the URL (distinct path) and clear the group; probe must succeed.
+	altered := `{"title":"Renamed","feed_url":"` + feedSrv.URL + `/feed2","site_url":"https://site2.example/","description":"d2","folder_id":null}`
+	resp, body = do(t, ts, "PUT", "/api/feeds/"+itoa(feed.ID), token, strings.NewReader(altered))
+	if resp.StatusCode != 200 {
+		t.Fatalf("update feed url: %d %s", resp.StatusCode, body)
+	}
+	updated = decode[feeds.Feed](t, body)
+	if updated.FeedURL != feedSrv.URL+"/feed2" || updated.SiteURL != "https://site2.example/" || updated.Description != "d2" {
+		t.Fatalf("unexpected url update %+v", updated)
+	}
+	if updated.FolderID != nil {
+		t.Fatalf("folder_id should be NULL, got %v", updated.FolderID)
+	}
+
+	// Unparseable URL → 422, no change.
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("<html>not a feed</html>"))
+	}))
+	defer bad.Close()
+	resp, body = do(t, ts, "PUT", "/api/feeds/"+itoa(feed.ID), token, strings.NewReader(`{"title":"Renamed","feed_url":"`+bad.URL+`/x"}`))
+	if resp.StatusCode != 422 {
+		t.Fatalf("bad feed url status = %d, body=%s", resp.StatusCode, body)
+	}
+
+	// Duplicate feed URL → 409.
+	resp, body = do(t, ts, "POST", "/api/feeds", token, strings.NewReader(`{"feed_url":"`+feedSrv.URL+`/feed3"}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("create second feed: %d %s", resp.StatusCode, body)
+	}
+	resp, body = do(t, ts, "PUT", "/api/feeds/"+itoa(feed.ID), token, strings.NewReader(`{"title":"Renamed","feed_url":"`+feedSrv.URL+`/feed3"}`))
+	if resp.StatusCode != 409 {
+		t.Fatalf("duplicate feed url status = %d, body=%s", resp.StatusCode, body)
+	}
 }
 
 func TestStatsAndReadAll(t *testing.T) {

@@ -19,7 +19,7 @@ export interface TreeShape {
   totalUnread: number
 }
 
-export function buildTree(feeds: Feed[], folders: Folder[]): TreeShape {
+export function buildTree(feeds: readonly Feed[], folders: readonly Folder[]): TreeShape {
   const sorted = [...feeds].sort((a, b) => a.title.localeCompare(b.title))
   const folderNodes = folders
     .map((f) => {
@@ -43,6 +43,14 @@ export function buildTree(feeds: Feed[], folders: Folder[]): TreeShape {
   }
 }
 
+export interface UpdateFeedPatch {
+  title: string
+  feed_url?: string
+  site_url?: string
+  description?: string
+  folder_id?: number | null
+}
+
 export interface FeedsTreeState {
   feeds: Feed[]
   folders: Folder[]
@@ -53,8 +61,8 @@ export interface FeedsTreeState {
 export interface FeedsTreeProvider {
   state: DeepReadonly<FeedsTreeState>
   reload: () => Promise<void>
-  addFeed: (feedUrl: string) => Promise<Feed>
-  renameFeed: (id: number, title: string) => Promise<void>
+  addFeed: (feedUrl: string, folderId?: number | null) => Promise<Feed>
+  updateFeed: (id: number, patch: UpdateFeedPatch) => Promise<void>
   deleteFeed: (id: number) => Promise<void>
   moveFeed: (id: number, folderId: number | null) => Promise<void>
   addFolder: (name: string) => Promise<void>
@@ -101,14 +109,13 @@ export function createFeedsTreeProvider(): FeedsTreeProvider {
   return {
     state: readonly(raw),
     reload,
-    async addFeed(feedUrl) {
-      const feed = await api.createFeed(feedUrl)
+    async addFeed(feedUrl, folderId = null) {
+      const feed = await api.createFeed(feedUrl, folderId)
       await reload()
       return feed
     },
-    renameFeed: async (id, title) => {
-      const feed = raw.feeds.find((f) => f.id === id)
-      await api.updateFeed(id, title, feed?.folder_id ?? null)
+    updateFeed: async (id, patch) => {
+      await api.updateFeed(id, patch)
       await reload()
     },
     deleteFeed: async (id) => {
@@ -117,7 +124,7 @@ export function createFeedsTreeProvider(): FeedsTreeProvider {
     },
     moveFeed: async (id, folderId) => {
       const feed = raw.feeds.find((f) => f.id === id)
-      await api.updateFeed(id, feed?.title ?? '', folderId)
+      await api.updateFeed(id, { title: feed?.title ?? '', folder_id: folderId })
       await reload()
     },
     addFolder: async (name) => {

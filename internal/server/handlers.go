@@ -58,7 +58,8 @@ func (s *Server) handleListFeeds(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		FeedURL string `json:"feed_url"`
+		FeedURL  string `json:"feed_url"`
+		FolderID *int   `json:"folder_id"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
@@ -83,6 +84,7 @@ func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 		FeedURL:     body.FeedURL,
 		SiteURL:     siteURL,
 		Description: pf.Description,
+		FolderID:    body.FolderID,
 	})
 	if err != nil {
 		s.repoError(w, err)
@@ -113,13 +115,36 @@ func (s *Server) handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Title    string `json:"title"`
-		FolderID *int   `json:"folder_id"`
+		Title       string `json:"title"`
+		FeedURL     *string `json:"feed_url"`
+		SiteURL     *string `json:"site_url"`
+		Description *string `json:"description"`
+		FolderID    *int    `json:"folder_id"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
 	}
-	feed, err := s.repo.UpdateFeed(id, body.Title, body.FolderID)
+	feedURL := body.FeedURL
+	if body.FeedURL != nil {
+		trimmed := strings.TrimSpace(*body.FeedURL)
+		if trimmed == "" {
+			writeError(w, http.StatusBadRequest, "feed_url cannot be empty")
+			return
+		}
+		if feed, err := s.repo.GetFeed(id); err != nil {
+			s.repoError(w, err)
+			return
+		} else if trimmed != feed.FeedURL {
+			// Re-validate a changed URL so we never store an unparseable feed.
+			if _, err := s.fetcher.Probe(trimmed); err != nil {
+				writeError(w, http.StatusUnprocessableEntity,
+					"feed URL is not parseable as RSS/Atom; paste a direct feed URL: "+err.Error())
+				return
+			}
+		}
+		feedURL = &trimmed
+	}
+	feed, err := s.repo.UpdateFeed(id, body.Title, feedURL, body.SiteURL, body.Description, body.FolderID)
 	if err != nil {
 		s.repoError(w, err)
 		return

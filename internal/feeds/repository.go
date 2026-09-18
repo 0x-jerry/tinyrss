@@ -161,7 +161,7 @@ func (r *Repo) ListFeeds() ([]Feed, error) {
 	return out, rows.Err()
 }
 
-func (r *Repo) UpdateFeed(id int, title string, folderID *int) (Feed, error) {
+func (r *Repo) UpdateFeed(id int, title string, feedURL, siteURL, description *string, folderID *int) (Feed, error) {
 	if folderID != nil {
 		ok, err := r.feedExistsFolder(folderID)
 		if err != nil {
@@ -171,12 +171,30 @@ func (r *Repo) UpdateFeed(id int, title string, folderID *int) (Feed, error) {
 			return Feed{}, ErrNotFound{what: "folder"}
 		}
 	}
-	var folderVal any
+	sets := []string{"title = ?", "folder_id = ?", "updated_at = CURRENT_TIMESTAMP"}
+	args := []any{title}
+	folderVal := any(nil)
 	if folderID != nil {
 		folderVal = *folderID
 	}
-	res, err := r.DB.Exec(`UPDATE feeds SET title = ?, folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-		title, folderVal, id)
+	args = append(args, folderVal)
+	if feedURL != nil {
+		sets = append(sets, "feed_url = ?")
+		args = append(args, *feedURL)
+	}
+	if siteURL != nil {
+		sets = append(sets, "site_url = ?")
+		args = append(args, *siteURL)
+	}
+	if description != nil {
+		sets = append(sets, "description = ?")
+		args = append(args, *description)
+	}
+	args = append(args, id)
+	res, err := r.DB.Exec(`UPDATE feeds SET `+strings.Join(sets, ", ")+` WHERE id = ?`, args...)
+	if isUnique(err) {
+		return Feed{}, ErrConflict{what: "feed_url already exists"}
+	}
 	if err != nil {
 		return Feed{}, err
 	}

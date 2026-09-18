@@ -52,6 +52,38 @@ describe('feedsTree provider import/export', () => {
     await expect(provider.exportOpmlText()).resolves.toBe(opml)
   })
 
+  it('adds a feed into the chosen group and reloads the tree', async () => {
+    const feed = { id: 9, title: 'New', render_mode: 0 } as Feed
+    vi.mocked(api.createFeed).mockResolvedValue(feed)
+    withFeedsTree([] as Feed[])
+
+    const provider = createFeedsTreeProvider()
+    const created = await provider.addFeed('https://x.example/rss', 3)
+
+    expect(created).toBe(feed)
+    expect(api.createFeed).toHaveBeenCalledWith('https://x.example/rss', 3)
+    expect(api.listFeeds).toHaveBeenCalled()
+  })
+
+  it('updates a feed and reloads the tree', async () => {
+    const feed = { id: 10, title: 'Old', render_mode: 0 } as Feed
+    vi.mocked(api.updateFeed).mockResolvedValue({ ...feed, title: 'New' })
+    withFeedsTree([feed])
+
+    const provider = createFeedsTreeProvider()
+    const patch = {
+      title: 'New',
+      feed_url: 'https://x.example/rss2',
+      site_url: 'https://x.example',
+      description: 'desc',
+      folder_id: 3,
+    }
+    await provider.updateFeed(10, patch)
+
+    expect(api.updateFeed).toHaveBeenCalledWith(10, patch)
+    expect(api.listFeeds).toHaveBeenCalled()
+  })
+
   it('sets the render mode on a feed and reflects it in state', async () => {
     const feed = { id: 7, render_mode: 0 } as Feed
     vi.mocked(api.setFeedRenderMode).mockResolvedValue({ ...feed, render_mode: 1 })

@@ -23,10 +23,13 @@ function readAllQuery(feedId: number | null, folderId: number | null): string {
 export const api = {
   // Feeds
   listFeeds: () => request<Feed[]>('GET', '/api/feeds'),
-  createFeed: (feedUrl: string) => request<Feed>('POST', '/api/feeds', { feed_url: feedUrl }),
+  createFeed: (feedUrl: string, folderId?: number | null) =>
+    request<Feed>('POST', '/api/feeds', { feed_url: feedUrl, folder_id: folderId ?? null }),
   getFeed: (id: number) => request<Feed>('GET', `/api/feeds/${id}`),
-  updateFeed: (id: number, title: string, folderId: number | null) =>
-    request<Feed>('PUT', `/api/feeds/${id}`, { title, folder_id: folderId }),
+  updateFeed: (
+    id: number,
+    patch: { title: string; feed_url?: string; site_url?: string; description?: string; folder_id?: number | null },
+  ) => request<Feed>('PUT', `/api/feeds/${id}`, patch),
   deleteFeed: (id: number) => request<void>('DELETE', `/api/feeds/${id}`),
   refreshFeed: (id: number) => request<FeedRefreshResult>('POST', `/api/feeds/${id}/refresh`),
   setFeedRenderMode: (id: number, mode: number) =>

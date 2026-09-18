@@ -80,6 +80,7 @@ export interface FeedsTreeProvider {
   deleteFolder: (id: number) => Promise<void>
   refreshAll: () => Promise<void>
   refreshFeed: (id: number) => Promise<void>
+  resumeRefresh: () => Promise<void>
   setRenderMode: (id: number, mode: number) => Promise<void>
   markAllRead: () => Promise<void>
   importOpmlForm: (form: FormData) => Promise<number>
@@ -115,6 +116,17 @@ export function createFeedsTreeProvider(): FeedsTreeProvider {
       failed: r.failed,
       newItems: r.new_items,
       currentTitle: r.current_feed_title,
+    }
+  }
+
+  // Poll the background refresh-all job until it stops, applying progress to
+  // the tree state as it goes. Shared by refreshAll and resumeRefresh.
+  async function pollRefresh() {
+    for (;;) {
+      const job = await api.refreshProgress()
+      applyRefresh(job)
+      if (!job.running) break
+      await sleep(500)
     }
   }
 
@@ -161,19 +173,21 @@ export function createFeedsTreeProvider(): FeedsTreeProvider {
       await api.deleteFolder(id)
       await reload()
     },
-    refreshAll: async () => {
+    async refreshAll() {
       await api.refreshAllFeeds()
-      // Poll the background job until it finishes, then reload the tree.
-      for (;;) {
-        const job = await api.refreshProgress()
-        applyRefresh(job)
-        if (!job.running) break
-        await sleep(500)
-      }
+      await pollRefresh()
       await reload()
     },
     refreshFeed: async (id) => {
       await api.refreshFeed(id)
+      await reload()
+    },
+    // Pick up a refresh-all still running on the server (e.g. after a page
+    // reload): keep driving the progress bar, then resync the tree when done.
+    async resumeRefresh() {
+      const job = await api.refreshProgress()
+      if (!job.running) return
+      await pollRefresh()
       await reload()
     },
     setRenderMode: async (id, mode) => {

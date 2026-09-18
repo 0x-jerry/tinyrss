@@ -142,4 +142,57 @@ describe('feedsTree provider import/export', () => {
     expect(api.listFeeds).toHaveBeenCalled()
     expect(provider.state.refresh).toMatchObject({ running: false, total: 2, done: 2, failed: 0 })
   })
+
+  it('resumeRefresh is a no-op when no job is running', async () => {
+    const idle: RefreshResult = {
+      running: false,
+      total: 2,
+      done: 2,
+      failed: 0,
+      new_items: 0,
+      current_feed_id: 0,
+      current_feed_title: '',
+    }
+    vi.mocked(api.refreshProgress).mockResolvedValue(idle)
+    const provider = withFeedsTree([{ id: 5, title: 'F', render_mode: 0 } as Feed])
+
+    await provider.resumeRefresh()
+
+    // No polling continues and the tree is not reloaded.
+    expect(api.refreshProgress).toHaveBeenCalledTimes(1)
+    expect(api.listFeeds).not.toHaveBeenCalled()
+    expect(provider.state.refresh).toMatchObject({ running: false })
+  })
+
+  it('resumeRefresh polls an in-flight job to idle then reloads', async () => {
+    const running: RefreshResult = {
+      running: true,
+      total: 3,
+      done: 1,
+      failed: 0,
+      new_items: 2,
+      current_feed_id: 2,
+      current_feed_title: 'B',
+    }
+    const idle: RefreshResult = {
+      running: false,
+      total: 3,
+      done: 3,
+      failed: 0,
+      new_items: 2,
+      current_feed_id: 0,
+      current_feed_title: '',
+    }
+    vi.mocked(api.refreshProgress)
+      .mockResolvedValueOnce(running)
+      .mockResolvedValueOnce(idle)
+    const provider = withFeedsTree([{ id: 1, title: 'A', render_mode: 0 } as Feed])
+
+    await provider.resumeRefresh()
+
+    expect(api.refreshProgress).toHaveBeenCalledTimes(2)
+    // reload() pulls feeds+folders once the resumed job is idle.
+    expect(api.listFeeds).toHaveBeenCalled()
+    expect(provider.state.refresh).toMatchObject({ running: false, total: 3, done: 3 })
+  })
 })

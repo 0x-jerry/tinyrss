@@ -32,6 +32,9 @@ onMounted(async () => {
     // Reopen the article remembered from the last session. openItem is the
     // explicit select+open action, so it also handles the item highlighting.
     if (!isMobile.value && selection.state.itemId != null) await items.openItem(selection.state.itemId).catch(() => {})
+    // Resume a refresh-all that was already running when this page loaded, so
+    // its progress bar shows and the tree resyncs when it finishes.
+    await feeds.resumeRefresh().catch(() => {})
   } catch (e) {
     toast.fromError(e)
   }

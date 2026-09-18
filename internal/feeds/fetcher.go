@@ -209,19 +209,21 @@ func (f *Fetcher) runRefreshAll(feeds []Feed) {
 	cutoff := time.Now().Add(-minRefreshGap)
 	var wg sync.WaitGroup
 	for _, fd := range feeds {
-		f.setCurrent(fd)
 		if last := lastFetched(fd); !last.IsZero() && !last.Before(cutoff) {
 			f.markDone(0, nil)
 			continue
 		}
 		wg.Add(1)
-		go func(id int) {
+		go func(fd Feed) {
 			defer wg.Done()
 			f.sem <- struct{}{}
 			defer func() { <-f.sem }()
-			newItems, err := f.RefreshFeed(id)
+			// Set current from inside the worker so the progress bar tracks a feed
+			// that is actually being fetched, not the last one merely dispatched.
+			f.setCurrent(fd)
+			newItems, err := f.RefreshFeed(fd.ID)
 			f.markDone(newItems, err)
-		}(fd.ID)
+		}(fd)
 	}
 	wg.Wait()
 }

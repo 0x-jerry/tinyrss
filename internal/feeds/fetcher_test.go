@@ -1,6 +1,7 @@
 package feeds
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -128,6 +129,68 @@ func TestFetcherRecordsFetchLogsOnSuccessAndFailure(t *testing.T) {
 	if !logs[1].Success || logs[1].Error != "" || logs[1].FeedTitle != "Good" {
 		t.Fatalf("older log = %+v, want success Good", logs[1])
 	}
+}
+
+func TestRefreshAllReportsInFlightFeedThenResets(t *testing.T) {
+	// Fetches gate on release so the job stays running; progress must name a
+	// feed that is actually being fetched, and clear it once the job settles.
+	release := make(chan struct{})
+	var srvWG sync.WaitGroup
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer srvWG.Done()
+		<-release
+		_, _ = w.Write([]byte(rssXML))
+	}))
+	defer srv.Close()
+
+	repo := newTestRepo(t)
+	fetcher := NewFetcher(repo)
+	ids := make([]int, 0, 6)
+	for i := 0; i < 6; i++ {
+		feed, err := repo.CreateFeed(Feed{Title: fmt.Sprintf("F%d", i+1), FeedURL: fmt.Sprintf("%s/feed-%d.xml", srv.URL, i)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		srvWG.Add(1)
+		ids = append(ids, feed.ID)
+	}
+
+	if err := fetcher.RefreshAllAsync(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait until at least one worker is actually fetching; the current feed must
+	// then be one of the created feeds (not empty).
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		job := fetcher.Progress()
+		if job.Running && job.CurrentID != 0 {
+			if !contains(ids, job.CurrentID) {
+				t.Fatalf("current feed id %d is not a known feed", job.CurrentID)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("refresh-all never reported an in-flight feed")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	close(release)
+	srvWG.Wait()
+	job := waitIdle(t, fetcher)
+	if job.Running || job.CurrentID != 0 || job.CurrentTitle != "" {
+		t.Fatalf("job after settle = %+v, want Running=false and cleared current feed", job)
+	}
+}
+
+func contains(ids []int, id int) bool {
+	for _, v := range ids {
+		if v == id {
+			return true
+		}
+	}
+	return false
 }
 
 // waitIdle polls Progress until the refresh-all job is no longer running.

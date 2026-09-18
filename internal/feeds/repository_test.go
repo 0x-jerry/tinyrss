@@ -2,6 +2,7 @@ package feeds
 
 import (
 	"testing"
+	"time"
 
 	"tinyrss/internal/store"
 )
@@ -26,8 +27,8 @@ func TestStoreMigrationsApplied(t *testing.T) {
 	if err := st.DB.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
-	if n != 2 {
-		t.Fatalf("want 2 applied migrations, got %d", n)
+	if n != 4 {
+		t.Fatalf("want 4 applied migrations, got %d", n)
 	}
 }
 
@@ -143,5 +144,65 @@ func TestRepoSearch(t *testing.T) {
 	}
 	if total != 1 || items[0].Title != "Golang generics guide" {
 		t.Fatalf("search total=%d items=%+v", total, items)
+	}
+}
+
+func TestFetchLogsAndCleanupSettings(t *testing.T) {
+	repo := newTestRepo(t)
+	feed, err := repo.CreateFeed(Feed{Title: "F", FeedURL: "https://example.com/rss"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Record a success then a failure; both become rows, newest first.
+	if err := repo.recordFetchResult(feed.ID, `"v1"`, "", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.recordFetchResult(feed.ID, "", "", "upstream returned 500", false); err != nil {
+		t.Fatal(err)
+	}
+	logs, err := repo.ListFetchLogs(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 2 {
+		t.Fatalf("fetch logs = %+v, want 2 rows", logs)
+	}
+	if logs[0].Success || logs[0].Error != "upstream returned 500" || logs[0].FeedTitle != "F" {
+		t.Fatalf("newest log = %+v", logs[0])
+	}
+	if !logs[1].Success || logs[1].Error != "" {
+		t.Fatalf("older log = %+v", logs[1])
+	}
+
+	// Prune removes only rows older than the cutoff.
+	pruned, err := repo.PruneFetchLogs(time.Now().Add(24 * time.Hour)) // past all rows
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pruned != 2 {
+		t.Fatalf("pruned = %d, want 2", pruned)
+	}
+	if logs, _ := repo.ListFetchLogs(0); len(logs) != 0 {
+		t.Fatalf("logs after prune = %+v, want empty", logs)
+	}
+
+	// Cleanup retention defaults to 30 days, persists round-trip.
+	s, err := repo.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.FetchLogCleanupDays != 30 {
+		t.Fatalf("default cleanup days = %d, want 30", s.FetchLogCleanupDays)
+	}
+	if err := repo.SetFetchLogCleanupDays(7); err != nil {
+		t.Fatal(err)
+	}
+	s, err = repo.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.FetchLogCleanupDays != 7 {
+		t.Fatalf("cleanup days after set = %d, want 7", s.FetchLogCleanupDays)
 	}
 }

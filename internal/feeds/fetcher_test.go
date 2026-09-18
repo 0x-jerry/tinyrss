@@ -92,6 +92,44 @@ func TestFetcherRecordsErrorKeepsFeedAlive(t *testing.T) {
 	}
 }
 
+func TestFetcherRecordsFetchLogsOnSuccessAndFailure(t *testing.T) {
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(rssXML))
+	}))
+	defer ok.Close()
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer bad.Close()
+
+	repo := newTestRepo(t)
+	fetcher := NewFetcher(repo)
+	good, _ := repo.CreateFeed(Feed{Title: "Good", FeedURL: ok.URL + "/feed.xml"})
+	broken, _ := repo.CreateFeed(Feed{Title: "Broken", FeedURL: bad.URL + "/feed.xml"})
+
+	if _, err := fetcher.RefreshFeed(good.ID); err != nil {
+		t.Fatalf("refresh good feed: %v", err)
+	}
+	if _, err := fetcher.RefreshFeed(broken.ID); err == nil {
+		t.Fatalf("refresh broken feed should fail")
+	}
+
+	logs, err := repo.ListFetchLogs(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 2 {
+		t.Fatalf("fetch logs = %+v, want 2 rows", logs)
+	}
+	// Newest (failed) first.
+	if logs[0].Success || logs[0].Error == "" || logs[0].FeedTitle != "Broken" {
+		t.Fatalf("newest log = %+v, want failed Broken", logs[0])
+	}
+	if !logs[1].Success || logs[1].Error != "" || logs[1].FeedTitle != "Good" {
+		t.Fatalf("older log = %+v, want success Good", logs[1])
+	}
+}
+
 // waitIdle polls Progress until the refresh-all job is no longer running.
 func waitIdle(t *testing.T, f *Fetcher) RefreshJob {
 	t.Helper()

@@ -4,6 +4,10 @@ package feeds
 
 const TimeLayout = "2006-01-02 15:04:05"
 
+// defaultFetchLogCleanupDays is the initial auto-clean retention; 0 disables
+// cleanup. The value is user-adjustable via the settings API.
+const defaultFetchLogCleanupDays = 30
+
 type Folder struct {
 	ID        int    `json:"id"`
 	Name      string `json:"name"`
@@ -25,6 +29,23 @@ type Feed struct {
 	Unread        int    `json:"unread"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
+}
+
+// FetchLog is one recorded fetch attempt: whether it succeeded, the error (if
+// any), and when it ran.
+type FetchLog struct {
+	ID        int    `json:"id"`
+	FeedID    int    `json:"feed_id"`
+	FeedTitle string `json:"feed_title"`
+	Success   bool   `json:"success"`
+	Error     string `json:"error"`
+	FetchedAt string `json:"fetched_at"`
+}
+
+// Settings holds the user-adjustable app settings. FetchLogCleanupDays is the
+// auto-clean retention in days; 0 disables cleanup.
+type Settings struct {
+	FetchLogCleanupDays int `json:"fetch_log_cleanup_days"`
 }
 
 // Item is both the list and detail representation. Summary/Content are only

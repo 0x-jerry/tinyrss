@@ -82,12 +82,24 @@ func (f *Fetcher) Start(interval time.Duration) {
 		for {
 			select {
 			case <-t.C:
+				f.maybePruneFetchLogs()
 				f.refreshDue(interval)
 			case <-f.stopCh:
 				return
 			}
 		}
 	}()
+	f.maybePruneFetchLogs()
+}
+
+// maybePruneFetchLogs deletes logs older than the configured retention; a
+// retention of 0 (disabled) or a settings read error skips cleanup.
+func (f *Fetcher) maybePruneFetchLogs() {
+	s, err := f.repo.GetSettings()
+	if err != nil || s.FetchLogCleanupDays <= 0 {
+		return
+	}
+	_, _ = f.repo.PruneFetchLogs(time.Now().AddDate(0, 0, -s.FetchLogCleanupDays))
 }
 
 func (f *Fetcher) Stop() {

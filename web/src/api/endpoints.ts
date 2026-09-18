@@ -2,6 +2,7 @@ import { request, requestText } from './client'
 import type {
   Feed,
   FeedRefreshResult,
+  FetchLog,
   Folder,
   Health,
   ItemDetail,
@@ -9,6 +10,7 @@ import type {
   OpmlImportResult,
   ReadAllResult,
   RefreshResult,
+  Settings,
   Stats,
 } from '../types/models'
 
@@ -58,4 +60,9 @@ export const api = {
   stats: () => request<Stats>('GET', '/api/stats'),
   importOpml: (form: FormData) => request<OpmlImportResult>('POST', '/api/opml/import', form),
   exportOpml: () => requestText('GET', '/api/opml/export'),
+
+  // Settings & fetch logs
+  fetchLogs: (limit?: number) => request<FetchLog[]>('GET', `/api/fetch-logs${limit ? `?limit=${limit}` : ''}`),
+  getSettings: () => request<Settings>('GET', '/api/settings'),
+  updateSettings: (patch: { fetch_log_cleanup_days: number }) => request<Settings>('PUT', '/api/settings', patch),
 }

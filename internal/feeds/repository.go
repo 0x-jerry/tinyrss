@@ -3,7 +3,9 @@ package feeds
 import (
 	"context"
 	"database/sql"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Repo struct {
@@ -224,7 +226,8 @@ func (r *Repo) SetRenderMode(id int, mode int) (Feed, error) {
 }
 
 // recordFetchResult updates a feed after a fetch attempt regardless of outcome
-// so a failing feed stays alive and is retried next cycle.
+// so a failing feed stays alive and is retried next cycle, and appends a row
+// to the fetch log so every attempt is auditable.
 func (r *Repo) recordFetchResult(id int, etag, lastModified, fetchErr string, success bool) error {
 	var err error
 	if success {
@@ -236,6 +239,75 @@ func (r *Repo) recordFetchResult(id int, etag, lastModified, fetchErr string, su
 			last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 			fetchErr, id)
 	}
+	if err != nil {
+		return err
+	}
+	_, err = r.DB.Exec(`INSERT INTO fetch_logs(feed_id, success, error) VALUES (?, ?, ?)`,
+		id, boolInt(success), fetchErr)
+	return err
+}
+
+// ListFetchLogs returns the most recent fetch log rows, joined with each feed's
+// current title, newest first.
+func (r *Repo) ListFetchLogs(limit int) ([]FetchLog, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	rows, err := r.DB.Query(`SELECT fl.id, fl.feed_id, f.title, fl.success, fl.error, fl.fetched_at
+		FROM fetch_logs fl JOIN feeds f ON f.id = fl.feed_id
+		ORDER BY fl.id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []FetchLog{}
+	for rows.Next() {
+		var l FetchLog
+		var fetchedAt sql.NullString
+		if err := rows.Scan(&l.ID, &l.FeedID, &l.FeedTitle, &l.Success, &l.Error, &fetchedAt); err != nil {
+			return nil, err
+		}
+		if fetchedAt.Valid {
+			l.FetchedAt = fetchedAt.String
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
+// PruneFetchLogs deletes log rows older than the cutoff; returns rows removed.
+func (r *Repo) PruneFetchLogs(olderThan time.Time) (int64, error) {
+	res, err := r.DB.Exec(`DELETE FROM fetch_logs WHERE fetched_at < ?`, olderThan.Format(TimeLayout))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// GetSettings returns the user-adjustable settings, defaulting auto-clean on
+// (30 days) only when no value has ever been stored.
+func (r *Repo) GetSettings() (Settings, error) {
+	s := Settings{FetchLogCleanupDays: defaultFetchLogCleanupDays}
+	var v string
+	switch err := r.DB.QueryRow(`SELECT value FROM settings WHERE key = 'fetch_log_cleanup_days'`).Scan(&v); {
+	case err == sql.ErrNoRows:
+		return s, nil
+	case err != nil:
+		return s, err
+	}
+	if n, err := strconv.Atoi(v); err == nil {
+		s.FetchLogCleanupDays = n
+	}
+	return s, nil
+}
+
+// SetFetchLogCleanupDays stores the auto-clean retention in days; 0 disables.
+func (r *Repo) SetFetchLogCleanupDays(days int) error {
+	_, err := r.DB.Exec(`INSERT INTO settings(key, value) VALUES ('fetch_log_cleanup_days', ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value`, strconv.Itoa(days))
 	return err
 }
 

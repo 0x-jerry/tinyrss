@@ -226,6 +226,7 @@ const refreshPercent = computed(() => {
             <span aria-hidden="true" class="i-lucide-rss text-[14px]" />
             <span class="row__label row__label--clip">{{ feed.title }}</span>
             <Badge :count="feed.unread" />
+            <span v-if="feed.fetch_error" class="feed__err" :title="feed.fetch_error" aria-label="Fetch error" />
             <button class="row__act" title="Edit feed" @click.stop="openEdit(feed)"><span aria-hidden="true" class="i-lucide-pencil text-[13px]" /></button>
             <button class="row__act" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
           </div>
@@ -263,6 +264,7 @@ const refreshPercent = computed(() => {
             <span aria-hidden="true" class="i-lucide-rss text-[14px]" />
             <span class="row__label row__label--clip">{{ feed.title }}</span>
             <Badge :count="feed.unread" />
+            <span v-if="feed.fetch_error" class="feed__err" :title="feed.fetch_error" aria-label="Fetch error" />
             <button class="row__act" title="Edit feed" @click.stop="openEdit(feed)"><span aria-hidden="true" class="i-lucide-pencil text-[13px]" /></button>
             <button class="row__act" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
           </div>
@@ -409,6 +411,13 @@ const refreshPercent = computed(() => {
   color: #7b8491;
   cursor: pointer;
   padding: 2px;
+}
+.feed__err {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e5484d;
 }
 .row:hover .row__act {
   display: inline-flex;

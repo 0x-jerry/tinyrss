@@ -432,6 +432,44 @@ func TestRefreshAllProgressEndpoints(t *testing.T) {
 	}
 }
 
+func TestSettingsAndFetchLogsEndpoints(t *testing.T) {
+	ts, repo := newTestServer(t)
+	feed, _ := repo.CreateFeed(feeds.Feed{Title: "B", FeedURL: "https://b.example/rss"})
+	if _, err := repo.DB.Exec(`INSERT INTO fetch_logs(feed_id, success, error) VALUES (?, 0, ?)`,
+		feed.ID, "upstream returned 500"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Settings default and update round-trip.
+	resp, body := do(t, ts, "GET", "/api/settings", token, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("get settings: %d %s", resp.StatusCode, body)
+	}
+	if s := decode[feeds.Settings](t, body); s.FetchLogCleanupDays != 30 {
+		t.Fatalf("default settings = %+v, want 30", s)
+	}
+	resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"fetch_log_cleanup_days":7}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("put settings: %d", resp.StatusCode)
+	}
+	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{}`)); resp.StatusCode != 400 {
+		t.Fatalf("missing days status = %d, want 400", resp.StatusCode)
+	}
+	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"fetch_log_cleanup_days":-1}`)); resp.StatusCode != 400 {
+		t.Fatalf("negative days status = %d, want 400", resp.StatusCode)
+	}
+
+	// Fetch logs endpoint returns the recorded attempt.
+	resp, body = do(t, ts, "GET", "/api/fetch-logs", token, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("fetch-logs: %d %s", resp.StatusCode, body)
+	}
+	logs := decode[[]feeds.FetchLog](t, body)
+	if len(logs) != 1 || logs[0].Success || logs[0].FeedTitle != "B" || logs[0].Error == "" {
+		t.Fatalf("fetch logs = %+v", logs)
+	}
+}
+
 func TestNotFoundAndSPA(t *testing.T) {
 	ts, _ := newTestServer(t)
 	if resp, body := do(t, ts, "GET", "/api/feeds/999", token, nil); resp.StatusCode != 404 {

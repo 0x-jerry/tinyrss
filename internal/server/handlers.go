@@ -44,6 +44,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/refresh", s.handleRefreshAll)
 	mux.HandleFunc("GET /api/refresh/progress", s.handleRefreshProgress)
 	mux.HandleFunc("GET /api/stats", s.handleStats)
+	mux.HandleFunc("GET /api/fetch-logs", s.handleListFetchLogs)
+	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
+	mux.HandleFunc("PUT /api/settings", s.handleUpdateSettings)
 }
 
 // ---- handlers ----
@@ -436,6 +439,48 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"items":  items,
 		"unread": unread,
 	})
+}
+
+func (s *Server) handleListFetchLogs(w http.ResponseWriter, r *http.Request) {
+	limit := atoiDefault(r.URL.Query().Get("limit"), 100)
+	logs, err := s.repo.ListFetchLogs(limit)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, logs)
+}
+
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.repo.GetSettings()
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, settings)
+}
+
+func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		FetchLogCleanupDays *int `json:"fetch_log_cleanup_days"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		return
+	}
+	if body.FetchLogCleanupDays == nil || *body.FetchLogCleanupDays < 0 {
+		writeError(w, http.StatusBadRequest, "fetch_log_cleanup_days must be a non-negative integer")
+		return
+	}
+	if err := s.repo.SetFetchLogCleanupDays(*body.FetchLogCleanupDays); err != nil {
+		s.serverError(w, err)
+		return
+	}
+	settings, err := s.repo.GetSettings()
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, settings)
 }
 
 // ---- helpers ----

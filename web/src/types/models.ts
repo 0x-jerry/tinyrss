@@ -82,3 +82,16 @@ export interface Health {
 export interface OpmlImportResult {
   added: number
 }
+
+export interface FetchLog {
+  id: number
+  feed_id: number
+  feed_title: string
+  success: boolean
+  error: string
+  fetched_at: string
+}
+
+export interface Settings {
+  fetch_log_cleanup_days: number
+}

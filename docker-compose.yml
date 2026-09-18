@@ -1,7 +1,6 @@
 services:
   tinyrss:
-    build: .
-    image: tinyrss:latest
+    image: ghcr.io/0x-jerry/tinyrss:latest
     restart: unless-stopped
     ports:
       - "8087:8087"

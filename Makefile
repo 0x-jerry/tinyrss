@@ -2,7 +2,7 @@
 
 ## Build the single binary: builds the Vue frontend, then compiles Go with the dist embedded.
 build: web
-	go build -o tinyrss .
+	go build -trimpath -ldflags="-s -w" -o tinyrss .
 
 ## Build just the frontend bundle.
 web:

@@ -15,13 +15,13 @@ RUN bun run build
 # ---- Backend: build the Go binary (embeds web/dist) ----
 FROM golang:1.27-alpine AS build
 WORKDIR /src
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache ca-certificates
 COPY go.mod go.sum ./
 RUN go mod download
 COPY --from=web /src/dist web/dist
 COPY . .
 ENV CGO_ENABLED=0 GOOS=linux
-RUN go build -o /out/tinyrss .
+RUN go build -trimpath -ldflags="-s -w" -buildvcs=false -o /out/tinyrss .
 
 # ---- Runtime ----
 FROM alpine:3.21

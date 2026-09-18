@@ -208,7 +208,7 @@ const refreshPercent = computed(() => {
           <button v-if="folder.feeds.length" class="row__act" title="Rename folder" @click.stop="openRenameFolder({ id: folder.id, name: folder.name })">
             <span aria-hidden="true" class="i-lucide-pencil text-[13px]" />
           </button>
-          <button class="row__act" title="Delete folder" @click.stop="confirmDelete('folder', folder.id, folder.name)">
+          <button class="row__act row__act--danger" title="Delete folder" @click.stop="confirmDelete('folder', folder.id, folder.name)">
             <span aria-hidden="true" class="i-lucide-trash text-[13px]" />
           </button>
         </div>
@@ -228,7 +228,7 @@ const refreshPercent = computed(() => {
             <Badge :count="feed.unread" />
             <span v-if="feed.fetch_error" class="feed__err" :title="feed.fetch_error" aria-label="Fetch error" />
             <button class="row__act" title="Edit feed" @click.stop="openEdit(feed)"><span aria-hidden="true" class="i-lucide-pencil text-[13px]" /></button>
-            <button class="row__act" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
+            <button class="row__act row__act--danger" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
           </div>
         </div>
       </section>
@@ -266,7 +266,7 @@ const refreshPercent = computed(() => {
             <Badge :count="feed.unread" />
             <span v-if="feed.fetch_error" class="feed__err" :title="feed.fetch_error" aria-label="Fetch error" />
             <button class="row__act" title="Edit feed" @click.stop="openEdit(feed)"><span aria-hidden="true" class="i-lucide-pencil text-[13px]" /></button>
-            <button class="row__act" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
+            <button class="row__act row__act--danger" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
           </div>
         </div>
       </section>
@@ -410,7 +410,24 @@ const refreshPercent = computed(() => {
   background: none;
   color: #7b8491;
   cursor: pointer;
-  padding: 2px;
+  padding: 3px;
+  border-radius: 5px;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.row__act:hover {
+  background: #e3e7ee;
+  color: #1c222a;
+}
+.row__act--danger:hover {
+  background: #fdecec;
+  color: #d64545;
+}
+.row__act:active {
+  transform: translateY(0.5px);
+}
+.row__act:focus-visible {
+  outline: 2px solid rgba(47, 111, 237, 0.5);
+  outline-offset: -1px;
 }
 .feed__err {
   flex: none;

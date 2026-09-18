@@ -69,6 +69,10 @@ const emit = defineEmits<ButtonEmits>()
   color: #d64545;
   border-color: #e8b4b4;
 }
+.btn--danger:hover:not(:disabled) {
+  background: #fdecec;
+  border-color: #f2c2c2;
+}
 .btn--sm {
   padding: 4px 8px;
   font-size: 12px;

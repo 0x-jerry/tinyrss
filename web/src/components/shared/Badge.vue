@@ -15,7 +15,7 @@ defineProps<BadgeProps>()
   min-width: 18px;
   padding: 1px 5px;
   border-radius: 9px;
-  background: #e9134b;
+  background: #8a94a1;
   color: #fff;
   font-size: 11px;
   font-weight: 600;

@@ -187,6 +187,7 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   border-bottom: 1px solid var(--border-subtle);
 }
 .toolbar__top {
+  height: 26px;
   display: flex;
   align-items: center;
   gap: 8px;

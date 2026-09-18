@@ -10,6 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@floating-ui/core": "^1.8.0",
+    "@floating-ui/dom": "^1.8.0",
     "@iconify-json/lucide": "^1.2.133",
     "@vueuse/core": "^15.0.0",
     "dompurify": "^3.4.15",

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tinyrss/internal/feeds"
+	"tinyrss/internal/repository"
 )
 
 func (s *Server) routes(mux *http.ServeMux) {
@@ -49,7 +49,6 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/settings", s.handleUpdateSettings)
 }
 
-// ---- handlers ----
 
 func (s *Server) handleListFeeds(w http.ResponseWriter, r *http.Request) {
 	feedsList, err := s.repo.ListFeeds()
@@ -83,7 +82,7 @@ func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 	if pf.Link != "" {
 		siteURL = pf.Link
 	}
-	feed, err := s.repo.CreateFeed(feeds.Feed{
+	feed, err := s.repo.CreateFeed(repository.Feed{
 		Title:       pf.Title,
 		FeedURL:     body.FeedURL,
 		SiteURL:     siteURL,
@@ -119,11 +118,11 @@ func (s *Server) handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Title       string `json:"title"`
-		FeedURL     *string `json:"feed_url"`
-		SiteURL     *string `json:"site_url"`
-		Description *string `json:"description"`
-		FolderID    *int    `json:"folder_id"`
+		Title       *string           `json:"title"`
+		FeedURL     *string           `json:"feed_url"`
+		SiteURL     *string           `json:"site_url"`
+		Description *string           `json:"description"`
+		FolderID    repository.FolderField `json:"folder_id"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
@@ -198,7 +197,7 @@ func (s *Server) handleRefreshFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	newItems, err := s.fetcher.RefreshFeed(id)
 	if err != nil {
-		var nf feeds.ErrNotFound
+		var nf repository.ErrNotFound
 		if errors.As(err, &nf) {
 			s.repoError(w, err)
 			return
@@ -280,7 +279,7 @@ func (s *Server) handleDeleteFolder(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListItems(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	filter := feeds.ItemFilter{
+	filter := repository.ItemFilter{
 		FeedID:   atoiDefault(q.Get("feed_id"), 0),
 		FolderID: atoiDefault(q.Get("folder_id"), 0),
 		Unread:   truthy(q.Get("unread")),
@@ -338,7 +337,7 @@ func (s *Server) handleMarkItem(kind string, value bool) http.HandlerFunc {
 
 func (s *Server) handleReadAll(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	filter := feeds.ItemFilter{
+	filter := repository.ItemFilter{
 		FeedID:   atoiDefault(q.Get("feed_id"), 0),
 		FolderID: atoiDefault(q.Get("folder_id"), 0),
 	}
@@ -496,7 +495,6 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, settings)
 }
 
-// ---- helpers ----
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -539,7 +537,7 @@ func errorString(err error) string {
 }
 
 func (s *Server) repoError(w http.ResponseWriter, err error) {
-	var nf feeds.ErrNotFound
+	var nf repository.ErrNotFound
 	switch {
 	case errors.As(err, &nf):
 		writeError(w, http.StatusNotFound, err.Error())
@@ -551,7 +549,7 @@ func (s *Server) repoError(w http.ResponseWriter, err error) {
 }
 
 func isConflict(err error) bool {
-	var c feeds.ErrConflict
+	var c repository.ErrConflict
 	return errors.As(err, &c)
 }
 

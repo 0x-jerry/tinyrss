@@ -1,5 +1,6 @@
 // Package server owns the HTTP layer: routing, middleware, JSON handlers and
-// the embedded SPA. Domain logic lives in internal/feeds.
+// the embedded SPA. Domain logic lives in internal/feeds; persistence and the
+// data model in internal/repository.
 package server
 
 import (
@@ -15,16 +16,17 @@ import (
 	"time"
 
 	"tinyrss/internal/feeds"
+	"tinyrss/internal/repository"
 )
 
 type Server struct {
-	repo    *feeds.Repo
+	repo    *repository.Repo
 	fetcher *feeds.Fetcher
 	token   []byte // empty = auth disabled
 	spa     fs.FS
 }
 
-func New(repo *feeds.Repo, fetcher *feeds.Fetcher, token string, spa fs.FS) *Server {
+func New(repo *repository.Repo, fetcher *feeds.Fetcher, token string, spa fs.FS) *Server {
 	s := &Server{repo: repo, fetcher: fetcher, spa: spa}
 	if token != "" {
 		s.token = []byte(token)
@@ -44,8 +46,6 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/", staticChain)
 	return mux
 }
-
-// ---- middleware ----
 
 type statusRecorder struct {
 	http.ResponseWriter
@@ -114,8 +114,6 @@ func (s *Server) authorized(r *http.Request) bool {
 	}
 	return subtle.ConstantTimeCompare([]byte(tok), s.token) == 1
 }
-
-// ---- response helpers ----
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

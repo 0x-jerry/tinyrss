@@ -1,4 +1,4 @@
-package feeds
+package repository
 
 import (
 	"bytes"

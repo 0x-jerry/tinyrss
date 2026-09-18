@@ -7,7 +7,20 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"tinyrss/internal/repository"
+	"tinyrss/internal/store"
 )
+
+func newTestRepo(t *testing.T) *repository.Repo {
+	t.Helper()
+	st, err := store.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	return repository.NewRepo(st.DB)
+}
 
 func TestFetcherConditionalGETAndNewItems(t *testing.T) {
 	const etag = `"v1"`
@@ -27,13 +40,12 @@ func TestFetcherConditionalGETAndNewItems(t *testing.T) {
 	defer srv.Close()
 
 	repo := newTestRepo(t)
-	feed, err := repo.CreateFeed(Feed{Title: "F", FeedURL: srv.URL + "/feed.xml"})
+	feed, err := repo.CreateFeed(repository.Feed{Title: "F", FeedURL: srv.URL + "/feed.xml"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	fetcher := NewFetcher(repo)
 
-	// First fetch parses items; all are new.
 	newCount, err := fetcher.RefreshFeed(feed.ID)
 	if err != nil {
 		t.Fatalf("first refresh: %v", err)
@@ -72,7 +84,7 @@ func TestFetcherRecordsErrorKeepsFeedAlive(t *testing.T) {
 	defer srv.Close()
 
 	repo := newTestRepo(t)
-	feed, err := repo.CreateFeed(Feed{Title: "F", FeedURL: srv.URL + "/feed.xml"})
+	feed, err := repo.CreateFeed(repository.Feed{Title: "F", FeedURL: srv.URL + "/feed.xml"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,8 +117,8 @@ func TestFetcherRecordsFetchLogsOnSuccessAndFailure(t *testing.T) {
 
 	repo := newTestRepo(t)
 	fetcher := NewFetcher(repo)
-	good, _ := repo.CreateFeed(Feed{Title: "Good", FeedURL: ok.URL + "/feed.xml"})
-	broken, _ := repo.CreateFeed(Feed{Title: "Broken", FeedURL: bad.URL + "/feed.xml"})
+	good, _ := repo.CreateFeed(repository.Feed{Title: "Good", FeedURL: ok.URL + "/feed.xml"})
+	broken, _ := repo.CreateFeed(repository.Feed{Title: "Broken", FeedURL: bad.URL + "/feed.xml"})
 
 	if _, err := fetcher.RefreshFeed(good.ID); err != nil {
 		t.Fatalf("refresh good feed: %v", err)
@@ -147,7 +159,7 @@ func TestRefreshAllReportsInFlightFeedThenResets(t *testing.T) {
 	fetcher := NewFetcher(repo)
 	ids := make([]int, 0, 6)
 	for i := 0; i < 6; i++ {
-		feed, err := repo.CreateFeed(Feed{Title: fmt.Sprintf("F%d", i+1), FeedURL: fmt.Sprintf("%s/feed-%d.xml", srv.URL, i)})
+		feed, err := repo.CreateFeed(repository.Feed{Title: fmt.Sprintf("F%d", i+1), FeedURL: fmt.Sprintf("%s/feed-%d.xml", srv.URL, i)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -222,7 +234,7 @@ func TestRefreshAllGapSkipsRecentFeeds(t *testing.T) {
 
 	repo := newTestRepo(t)
 	fetcher := NewFetcher(repo)
-	feed, err := repo.CreateFeed(Feed{Title: "F", FeedURL: srv.URL + "/feed.xml"})
+	feed, err := repo.CreateFeed(repository.Feed{Title: "F", FeedURL: srv.URL + "/feed.xml"})
 	if err != nil {
 		t.Fatal(err)
 	}

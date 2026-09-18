@@ -1,5 +1,6 @@
 // Package store owns the raw SQLite connection: opening, PRAGMAs and
-// versioned schema migrations. Domain logic lives in internal/feeds.
+// versioned schema migrations. Domain logic lives in internal/feeds and
+// internal/repository.
 package store
 
 import (

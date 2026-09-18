@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"tinyrss/internal/feeds"
+	"tinyrss/internal/repository"
 	"tinyrss/internal/store"
 )
 
@@ -29,13 +30,13 @@ const testRSS = `<?xml version="1.0" encoding="UTF-8"?>
 <pubDate>Mon, 02 Jan 2006 15:04:05 +0000</pubDate><description>sum</description></item>
 </channel></rss>`
 
-func newTestServer(t *testing.T) (*httptest.Server, *feeds.Repo) {
+func newTestServer(t *testing.T) (*httptest.Server, *repository.Repo) {
 	t.Helper()
 	st, err := store.Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo := feeds.NewRepo(st.DB)
+	repo := repository.NewRepo(st.DB)
 	fetcher := feeds.NewFetcher(repo)
 	spa := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<h1>tinyrss</h1>")}}
 	s := New(repo, fetcher, token, spa)
@@ -95,7 +96,6 @@ func TestAuthGuard(t *testing.T) {
 		t.Fatalf("unexpected body %s", body)
 	}
 
-	// Wrong token is rejected, right token passes.
 	if resp, _ := do(t, ts, "GET", "/api/feeds", "wrong", nil); resp.StatusCode != 401 {
 		t.Fatalf("wrong-token status = %d", resp.StatusCode)
 	}
@@ -116,12 +116,11 @@ func TestFeedLifecycleAndItems(t *testing.T) {
 	}))
 	defer feedSrv.Close()
 
-	// Create folder + feed.
 	resp, body := do(t, ts, "POST", "/api/folders", token, strings.NewReader(`{"name":"Tech"}`))
 	if resp.StatusCode != 200 {
 		t.Fatalf("create folder: %d %s", resp.StatusCode, body)
 	}
-	folder := decode[feeds.Folder](t, body)
+	folder := decode[repository.Folder](t, body)
 	if folder.ID == 0 || folder.Name != "Tech" {
 		t.Fatalf("unexpected folder %+v", folder)
 	}
@@ -130,12 +129,11 @@ func TestFeedLifecycleAndItems(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("create feed: %d %s", resp.StatusCode, body)
 	}
-	feed := decode[feeds.Feed](t, body)
+	feed := decode[repository.Feed](t, body)
 	if feed.ID == 0 || feed.Title != "Example Blog" || feed.Unread != 1 {
 		t.Fatalf("unexpected feed %+v", feed)
 	}
 
-	// Unparseable URL → 422.
 	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("<html>not a feed</html>"))
 	}))
@@ -161,7 +159,7 @@ func TestFeedLifecycleAndItems(t *testing.T) {
 		t.Fatalf("items: %d %s", resp.StatusCode, body)
 	}
 	list := decode[struct {
-		Items []feeds.Item `json:"items"`
+		Items []repository.Item `json:"items"`
 		Total int          `json:"total"`
 	}](t, body)
 	if list.Total != 1 || len(list.Items) != 1 {
@@ -172,18 +170,17 @@ func TestFeedLifecycleAndItems(t *testing.T) {
 		t.Error("list items must not include content/summary")
 	}
 	resp, body = do(t, ts, "GET", "/api/items/"+itoa(item.ID), token, nil)
-	detail := decode[feeds.Item](t, body)
+	detail := decode[repository.Item](t, body)
 	if detail.Summary != "sum" {
 		t.Fatalf("detail summary = %q", detail.Summary)
 	}
 
-	// Mark read → unread count drops to 0.
 	resp, _ = do(t, ts, "POST", "/api/items/"+itoa(item.ID)+"/read", token, nil)
 	if resp.StatusCode != 204 {
 		t.Fatalf("mark read status = %d", resp.StatusCode)
 	}
 	resp, body = do(t, ts, "GET", "/api/feeds/"+itoa(feed.ID), token, nil)
-	if decode[feeds.Feed](t, body).Unread != 0 {
+	if decode[repository.Feed](t, body).Unread != 0 {
 		t.Fatalf("unread after read: %s", body)
 	}
 
@@ -193,7 +190,7 @@ func TestFeedLifecycleAndItems(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("create feed in folder: %d %s", resp.StatusCode, body)
 	}
-	folderFeed := decode[feeds.Feed](t, body)
+	folderFeed := decode[repository.Feed](t, body)
 	if folderFeed.FolderID == nil || *folderFeed.FolderID != folder.ID {
 		t.Fatalf("feed folder_id = %v, want %d", folderFeed.FolderID, folder.ID)
 	}
@@ -207,26 +204,24 @@ func TestUpdateFeed(t *testing.T) {
 	}))
 	defer feedSrv.Close()
 
-	// Create a feed and a folder to attach it to.
 	resp, body := do(t, ts, "POST", "/api/feeds", token, strings.NewReader(`{"feed_url":"`+feedSrv.URL+`/feed"}`))
 	if resp.StatusCode != 200 {
 		t.Fatalf("create feed: %d %s", resp.StatusCode, body)
 	}
-	feed := decode[feeds.Feed](t, body)
+	feed := decode[repository.Feed](t, body)
 
 	resp, body = do(t, ts, "POST", "/api/folders", token, strings.NewReader(`{"name":"Down"}`))
 	if resp.StatusCode != 200 {
 		t.Fatalf("create folder: %d %s", resp.StatusCode, body)
 	}
-	folder := decode[feeds.Folder](t, body)
+	folder := decode[repository.Folder](t, body)
 
-	// Update title, site_url, description and group while keeping the URL.
 	resp, body = do(t, ts, "PUT", "/api/feeds/"+itoa(feed.ID), token, strings.NewReader(
 		`{"title":"Renamed","site_url":"https://news.example/","description":"new desc","folder_id":`+itoa(folder.ID)+`}`))
 	if resp.StatusCode != 200 {
 		t.Fatalf("update feed: %d %s", resp.StatusCode, body)
 	}
-	updated := decode[feeds.Feed](t, body)
+	updated := decode[repository.Feed](t, body)
 	if updated.Title != "Renamed" || updated.SiteURL != "https://news.example/" ||
 		updated.Description != "new desc" || updated.FolderID == nil || *updated.FolderID != folder.ID {
 		t.Fatalf("unexpected updated feed %+v", updated)
@@ -238,7 +233,7 @@ func TestUpdateFeed(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("update feed url: %d %s", resp.StatusCode, body)
 	}
-	updated = decode[feeds.Feed](t, body)
+	updated = decode[repository.Feed](t, body)
 	if updated.FeedURL != feedSrv.URL+"/feed2" || updated.SiteURL != "https://site2.example/" || updated.Description != "d2" {
 		t.Fatalf("unexpected url update %+v", updated)
 	}
@@ -246,7 +241,21 @@ func TestUpdateFeed(t *testing.T) {
 		t.Fatalf("folder_id should be NULL, got %v", updated.FolderID)
 	}
 
-	// Unparseable URL → 422, no change.
+	// Re-assign the folder, then a description-only PUT must leave the omitted
+	// title and folder_id untouched.
+	resp, body = do(t, ts, "PUT", "/api/feeds/"+itoa(feed.ID), token, strings.NewReader(`{"folder_id":`+itoa(folder.ID)+`}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("re-assign folder: %d %s", resp.StatusCode, body)
+	}
+	resp, body = do(t, ts, "PUT", "/api/feeds/"+itoa(feed.ID), token, strings.NewReader(`{"description":"d3"}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("description-only update: %d %s", resp.StatusCode, body)
+	}
+	updated = decode[repository.Feed](t, body)
+	if updated.Title != "Renamed" || updated.FolderID == nil || *updated.FolderID != folder.ID || updated.Description != "d3" {
+		t.Fatalf("omitted title/folder_id regressed: %+v", updated)
+	}
+
 	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("<html>not a feed</html>"))
 	}))
@@ -256,7 +265,6 @@ func TestUpdateFeed(t *testing.T) {
 		t.Fatalf("bad feed url status = %d, body=%s", resp.StatusCode, body)
 	}
 
-	// Duplicate feed URL → 409.
 	resp, body = do(t, ts, "POST", "/api/feeds", token, strings.NewReader(`{"feed_url":"`+feedSrv.URL+`/feed3"}`))
 	if resp.StatusCode != 200 {
 		t.Fatalf("create second feed: %d %s", resp.StatusCode, body)
@@ -270,8 +278,8 @@ func TestUpdateFeed(t *testing.T) {
 func TestStatsAndReadAll(t *testing.T) {
 	ts, repo := newTestServer(t)
 	folder, _ := repo.CreateFolder("F")
-	feed, _ := repo.CreateFeed(feeds.Feed{Title: "B", FeedURL: "https://b.example/rss", FolderID: &folder.ID})
-	repo.AddItems(feed.ID, []feeds.Item{
+	feed, _ := repo.CreateFeed(repository.Feed{Title: "B", FeedURL: "https://b.example/rss", FolderID: &folder.ID})
+	repo.AddItems(feed.ID, []repository.Item{
 		{GUID: "a", Title: "one"},
 		{GUID: "b", Title: "two"},
 	})
@@ -332,21 +340,19 @@ func TestOPMLOverHTTP(t *testing.T) {
 
 func TestSetRenderMode(t *testing.T) {
 	ts, repo := newTestServer(t)
-	feed, _ := repo.CreateFeed(feeds.Feed{Title: "B", FeedURL: "https://b.example/rss"})
+	feed, _ := repo.CreateFeed(repository.Feed{Title: "B", FeedURL: "https://b.example/rss"})
 
 	resp, body := do(t, ts, "POST", "/api/feeds/"+itoa(feed.ID)+"/render-mode", token, strings.NewReader(`{"render_mode":2}`))
 	if resp.StatusCode != 200 {
 		t.Fatalf("set render-mode: %d %s", resp.StatusCode, body)
 	}
-	if decode[feeds.Feed](t, body).RenderMode != 2 {
+	if decode[repository.Feed](t, body).RenderMode != 2 {
 		t.Fatalf("render_mode not persisted: %s", body)
 	}
 
-	// Invalid value → 400.
 	if resp, _ := do(t, ts, "POST", "/api/feeds/"+itoa(feed.ID)+"/render-mode", token, strings.NewReader(`{"render_mode":3}`)); resp.StatusCode != 400 {
 		t.Fatalf("invalid render_mode status = %d", resp.StatusCode)
 	}
-	// Missing feed → 404.
 	if resp, _ := do(t, ts, "POST", "/api/feeds/99999/render-mode", token, strings.NewReader(`{"render_mode":1}`)); resp.StatusCode != 404 {
 		t.Fatalf("missing feed status = %d", resp.StatusCode)
 	}
@@ -405,12 +411,10 @@ func TestRenderEndpoint(t *testing.T) {
 		t.Fatalf("upstream hits = %d, want 1 (cached)", hits)
 	}
 
-	// Non-http scheme → 400.
 	if resp, _ := do(t, ts, "GET", "/api/render?url="+url.QueryEscape("file:///etc/passwd"), token, nil); resp.StatusCode != 400 {
 		t.Fatalf("bad scheme status = %d", resp.StatusCode)
 	}
 
-	// Upstream 500 → 502.
 	if resp, _ := do(t, ts, "GET", "/api/render?url="+url.QueryEscape(upstream.URL+"/err"), token, nil); resp.StatusCode != 502 {
 		t.Fatalf("upstream error status = %d", resp.StatusCode)
 	}
@@ -422,7 +426,7 @@ func TestRefreshAllProgressEndpoints(t *testing.T) {
 		_, _ = w.Write([]byte(testRSS))
 	}))
 	defer feedSrv.Close()
-	if _, err := repo.CreateFeed(feeds.Feed{Title: "F", FeedURL: feedSrv.URL + "/feed"}); err != nil {
+	if _, err := repo.CreateFeed(repository.Feed{Title: "F", FeedURL: feedSrv.URL + "/feed"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -452,18 +456,17 @@ func TestRefreshAllProgressEndpoints(t *testing.T) {
 
 func TestSettingsAndFetchLogsEndpoints(t *testing.T) {
 	ts, repo := newTestServer(t)
-	feed, _ := repo.CreateFeed(feeds.Feed{Title: "B", FeedURL: "https://b.example/rss"})
+	feed, _ := repo.CreateFeed(repository.Feed{Title: "B", FeedURL: "https://b.example/rss"})
 	if _, err := repo.DB.Exec(`INSERT INTO fetch_logs(feed_id, success, error) VALUES (?, 0, ?)`,
 		feed.ID, "upstream returned 500"); err != nil {
 		t.Fatal(err)
 	}
 
-	// Settings default and update round-trip.
 	resp, body := do(t, ts, "GET", "/api/settings", token, nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("get settings: %d %s", resp.StatusCode, body)
 	}
-	if s := decode[feeds.Settings](t, body); s.FetchLogCleanupDays != 30 || s.RenderCacheCleanupDays != 30 {
+	if s := decode[repository.Settings](t, body); s.FetchLogCleanupDays != 30 || s.RenderCacheCleanupDays != 30 {
 		t.Fatalf("default settings = %+v, want both 30", s)
 	}
 	// Partial updates apply only the present field and keep the other.
@@ -471,14 +474,14 @@ func TestSettingsAndFetchLogsEndpoints(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("put settings: %d", resp.StatusCode)
 	}
-	if s := decode[feeds.Settings](t, body); s.FetchLogCleanupDays != 7 || s.RenderCacheCleanupDays != 30 {
+	if s := decode[repository.Settings](t, body); s.FetchLogCleanupDays != 7 || s.RenderCacheCleanupDays != 30 {
 		t.Fatalf("settings after fetch update = %+v", s)
 	}
 	resp, body = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"render_cache_cleanup_days":14}`))
 	if resp.StatusCode != 200 {
 		t.Fatalf("put render settings: %d", resp.StatusCode)
 	}
-	if s := decode[feeds.Settings](t, body); s.FetchLogCleanupDays != 7 || s.RenderCacheCleanupDays != 14 {
+	if s := decode[repository.Settings](t, body); s.FetchLogCleanupDays != 7 || s.RenderCacheCleanupDays != 14 {
 		t.Fatalf("settings after render update = %+v", s)
 	}
 	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"fetch_log_cleanup_days":-1}`)); resp.StatusCode != 400 {
@@ -488,12 +491,11 @@ func TestSettingsAndFetchLogsEndpoints(t *testing.T) {
 		t.Fatalf("negative render days status = %d, want 400", resp.StatusCode)
 	}
 
-	// Fetch logs endpoint returns the recorded attempt.
 	resp, body = do(t, ts, "GET", "/api/fetch-logs", token, nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("fetch-logs: %d %s", resp.StatusCode, body)
 	}
-	logs := decode[[]feeds.FetchLog](t, body)
+	logs := decode[[]repository.FetchLog](t, body)
 	if len(logs) != 1 || logs[0].Success || logs[0].FeedTitle != "B" || logs[0].Error == "" {
 		t.Fatalf("fetch logs = %+v", logs)
 	}

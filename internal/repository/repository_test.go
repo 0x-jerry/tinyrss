@@ -1,6 +1,7 @@
-package feeds
+package repository
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -69,7 +70,6 @@ func TestRepoCRUDDedupUnread(t *testing.T) {
 		t.Fatalf("create feed: %v", err)
 	}
 
-	// First insert: both items are new (unread).
 	first := []Item{
 		{GUID: "a", Title: "One", URL: "https://example.com/1", Content: "c1"},
 		{GUID: "b", Title: "Two", URL: "https://example.com/2", Content: "c2"},
@@ -77,7 +77,6 @@ func TestRepoCRUDDedupUnread(t *testing.T) {
 	if n, err := repo.AddItems(feed.ID, first); err != nil || n != 2 {
 		t.Fatalf("first AddItems: n=%d err=%v", n, err)
 	}
-	// Re-inserting the same GUIDs adds nothing (dedup).
 	if n, err := repo.AddItems(feed.ID, first); err != nil || n != 0 {
 		t.Fatalf("dup AddItems: n=%d err=%v", n, err)
 	}
@@ -90,7 +89,6 @@ func TestRepoCRUDDedupUnread(t *testing.T) {
 		t.Fatalf("unread = %d, want 2", feed.Unread)
 	}
 
-	// Mark read via ListItems + SetRead.
 	items, total, err := repo.ListItems(ItemFilter{FeedID: feed.ID})
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +104,6 @@ func TestRepoCRUDDedupUnread(t *testing.T) {
 		t.Fatalf("unread after read = %d, want 1", feed.Unread)
 	}
 
-	// Folder-scoped mark-all-read touches both matching items.
 	count, err := repo.MarkAllRead(ItemFilter{FolderID: folder.ID})
 	if err != nil || count != 2 {
 		t.Fatalf("mark-all-read: count=%d err=%v", count, err)
@@ -147,6 +144,145 @@ func TestRepoSearch(t *testing.T) {
 	}
 }
 
+func TestUpdateFeedPartial(t *testing.T) {
+	repo := newTestRepo(t)
+	folderA, err := repo.CreateFolder("A")
+	if err != nil {
+		t.Fatal(err)
+	}
+	folderB, err := repo.CreateFolder("B")
+	if err != nil {
+		t.Fatal(err)
+	}
+	feed, err := repo.CreateFeed(Feed{Title: "Original", FeedURL: "https://example.com/rss", FolderID: &folderA.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	title := "Renamed"
+	feed, err = repo.UpdateFeed(feed.ID, &title, nil, nil, nil, FolderField{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feed.Title != "Renamed" || feed.FolderID == nil || *feed.FolderID != folderA.ID {
+		t.Fatalf("after title-only update = %+v", feed)
+	}
+
+	feed, err = repo.UpdateFeed(feed.ID, nil, nil, nil, nil, FolderField{Null: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feed.FolderID != nil {
+		t.Fatalf("folder should be cleared, got %v", *feed.FolderID)
+	}
+	if feed.Title != "Renamed" {
+		t.Fatalf("title regressed to %q", feed.Title)
+	}
+
+	feed, err = repo.UpdateFeed(feed.ID, nil, nil, nil, nil, FolderField{Set: true, ID: folderB.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feed.FolderID == nil || *feed.FolderID != folderB.ID {
+		t.Fatalf("folder should be B, got %v", feed.FolderID)
+	}
+
+	if _, err := repo.UpdateFeed(feed.ID, nil, nil, nil, nil, FolderField{Set: true, ID: 99999}); err == nil {
+		t.Fatal("expected not-found for missing folder")
+	}
+
+	feed2, err := repo.UpdateFeed(feed.ID, nil, nil, nil, nil, FolderField{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feed2.Title != feed.Title || feed2.FolderID == nil || *feed2.FolderID != folderB.ID {
+		t.Fatalf("no-op update changed the feed: %+v", feed2)
+	}
+}
+
+func TestFolderFieldUnmarshal(t *testing.T) {
+	decode := func(s string) (FolderField, error) {
+		var f FolderField
+		err := json.Unmarshal([]byte(s), &f)
+		return f, err
+	}
+	if f, err := decode("null"); err != nil || !f.Null || f.Set {
+		t.Fatalf("null -> %+v err=%v", f, err)
+	}
+	if f, err := decode("3"); err != nil || f.Set != true || f.Null || f.ID != 3 {
+		t.Fatalf("3 -> %+v err=%v", f, err)
+	}
+	if _, err := decode(`"abc"`); err == nil {
+		t.Fatal("expected error for non-numeric value")
+	}
+}
+
+func TestPruneFetchLogsUTC(t *testing.T) {
+	repo := newTestRepo(t)
+	feed, err := repo.CreateFeed(Feed{Title: "F", FeedURL: "https://example.com/rss"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Stored fetched_at values are UTC wall-clock, as CURRENT_TIMESTAMP writes.
+	for _, ts := range []string{"2020-01-14 22:00:00", "2020-01-15 02:00:00"} {
+		if _, err := repo.DB.Exec(
+			`INSERT INTO fetch_logs(feed_id, success, error, fetched_at) VALUES (?, 1, '', ?)`,
+			feed.ID, ts); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A cutoff expressed in a non-UTC zone must be normalised to UTC before the
+	// string comparison. UTC+8 local 2020-01-15 08:00 is UTC 2020-01-15 00:00,
+	// which prunes only the 22:00 row and keeps the 02:00 row. Without the UTC
+	// normalisation the literal would be the local "2020-01-15 08:00:00" and
+	// both rows would be pruned.
+	cutoff := time.Date(2020, 1, 15, 8, 0, 0, 0, time.FixedZone("UTC+8", 8*3600))
+	pruned, err := repo.PruneFetchLogs(cutoff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pruned != 1 {
+		t.Fatalf("pruned = %d, want 1", pruned)
+	}
+	logs, err := repo.ListFetchLogs(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 1 || len(logs[0].FetchedAt) < 10 || logs[0].FetchedAt[:10] != "2020-01-15" {
+		t.Fatalf("surviving log = %+v, want the 2020-01-15 row", logs)
+	}
+}
+
+func TestPruneRenderCacheUTC(t *testing.T) {
+	repo := newTestRepo(t)
+	for _, row := range []struct{ url, ts string }{
+		{"https://example.com/a", "2020-01-14 22:00:00"},
+		{"https://example.com/b", "2020-01-15 02:00:00"},
+	} {
+		if _, err := repo.DB.Exec(
+			`INSERT INTO render_cache(url, html, created_at) VALUES (?, '<p>x</p>', ?)`,
+			row.url, row.ts); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// UTC+8 local 2020-01-15 08:00 is UTC 2020-01-15 00:00; only the older row
+	// (22:00 on the 14th) is older than the cutoff.
+	cutoff := time.Date(2020, 1, 15, 8, 0, 0, 0, time.FixedZone("UTC+8", 8*3600))
+	pruned, err := repo.PruneRenderCache(cutoff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pruned != 1 {
+		t.Fatalf("pruned = %d, want 1", pruned)
+	}
+	if _, ok, _ := repo.GetRenderCache("https://example.com/b"); !ok {
+		t.Fatal("newer cached render was pruned")
+	}
+	if _, ok, _ := repo.GetRenderCache("https://example.com/a"); ok {
+		t.Fatal("older cached render survived prune")
+	}
+}
+
 func TestFetchLogsAndCleanupSettings(t *testing.T) {
 	repo := newTestRepo(t)
 	feed, err := repo.CreateFeed(Feed{Title: "F", FeedURL: "https://example.com/rss"})
@@ -155,10 +291,10 @@ func TestFetchLogsAndCleanupSettings(t *testing.T) {
 	}
 
 	// Record a success then a failure; both become rows, newest first.
-	if err := repo.recordFetchResult(feed.ID, `"v1"`, "", "", true); err != nil {
+	if err := repo.RecordFetchResult(feed.ID, `"v1"`, "", "", true); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.recordFetchResult(feed.ID, "", "", "upstream returned 500", false); err != nil {
+	if err := repo.RecordFetchResult(feed.ID, "", "", "upstream returned 500", false); err != nil {
 		t.Fatal(err)
 	}
 	logs, err := repo.ListFetchLogs(0)
@@ -175,7 +311,6 @@ func TestFetchLogsAndCleanupSettings(t *testing.T) {
 		t.Fatalf("older log = %+v", logs[1])
 	}
 
-	// Prune removes only rows older than the cutoff.
 	pruned, err := repo.PruneFetchLogs(time.Now().Add(24 * time.Hour)) // past all rows
 	if err != nil {
 		t.Fatal(err)
@@ -187,7 +322,6 @@ func TestFetchLogsAndCleanupSettings(t *testing.T) {
 		t.Fatalf("logs after prune = %+v, want empty", logs)
 	}
 
-	// Cleanup retention defaults to 30 days, persists round-trip.
 	s, err := repo.GetSettings()
 	if err != nil {
 		t.Fatal(err)
@@ -226,12 +360,10 @@ func TestFetchLogsAndCleanupSettings(t *testing.T) {
 func TestRenderCache(t *testing.T) {
 	repo := newTestRepo(t)
 
-	// Miss on an unknown URL.
 	if _, ok, err := repo.GetRenderCache("https://example.com/a"); err != nil || ok {
 		t.Fatalf("unexpected cache hit: ok=%v err=%v", ok, err)
 	}
 
-	// Put then get round-trips; putting again refreshes the value.
 	if err := repo.PutRenderCache("https://example.com/a", "<p>one</p>"); err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +377,6 @@ func TestRenderCache(t *testing.T) {
 		t.Fatalf("get after repopulate = %q, want <p>two</p>", got)
 	}
 
-	// Prune removes only rows older than the cutoff.
 	if err := repo.PutRenderCache("https://example.com/b", "<p>new</p>"); err != nil {
 		t.Fatal(err)
 	}

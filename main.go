@@ -14,6 +14,7 @@ import (
 
 	"tinyrss/internal/config"
 	"tinyrss/internal/feeds"
+	"tinyrss/internal/repository"
 	"tinyrss/internal/server"
 	"tinyrss/internal/store"
 )
@@ -33,7 +34,7 @@ func main() {
 	}
 	defer st.Close()
 
-	repo := feeds.NewRepo(st.DB)
+	repo := repository.NewRepo(st.DB)
 	fetcher := feeds.NewFetcher(repo)
 	fetcher.Start(cfg.Refresh)
 

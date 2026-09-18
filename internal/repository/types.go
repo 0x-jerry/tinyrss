@@ -1,13 +1,15 @@
-// Package feeds owns the reader domain: the item/feed/folder repository,
-// fetching & parsing, scheduling, and OPML. HTTP lives in internal/server.
-package feeds
+// Package repository owns the SQLite-backed persistence for the reader domain:
+// the item/feed/folder repository, fetch logs, render cache, settings, and OPML
+// import/export, plus the data model those tables map to. HTTP lives in
+// internal/server and fetching/render in internal/feeds.
+package repository
 
 const TimeLayout = "2006-01-02 15:04:05"
 
 // defaultFetchLogCleanupDays is the initial auto-clean retention; 0 disables
 // cleanup. The value is user-adjustable via the settings API.
 const (
-	defaultFetchLogCleanupDays     = 30
+	defaultFetchLogCleanupDays    = 30
 	defaultRenderCacheCleanupDays = 30
 )
 
@@ -49,8 +51,8 @@ type FetchLog struct {
 // auto-clean retention for fetch logs and RenderCacheCleanupDays the retention
 // for the server-render cache, both in days; 0 disables cleanup.
 type Settings struct {
-	FetchLogCleanupDays     int `json:"fetch_log_cleanup_days"`
-	RenderCacheCleanupDays  int `json:"render_cache_cleanup_days"`
+	FetchLogCleanupDays    int `json:"fetch_log_cleanup_days"`
+	RenderCacheCleanupDays int `json:"render_cache_cleanup_days"`
 }
 
 // Item is both the list and detail representation. Summary/Content are only
@@ -81,11 +83,3 @@ type ItemFilter struct {
 	Page     int
 	Limit    int
 }
-
-type ErrNotFound struct{ what string }
-
-func (e ErrNotFound) Error() string { return e.what + " not found" }
-
-type ErrConflict struct{ what string }
-
-func (e ErrConflict) Error() string { return e.what }

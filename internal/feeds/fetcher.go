@@ -1,3 +1,7 @@
+// Package feeds is the reader's fetch & render service: it polls feeds into
+// the repository with conditional GET, coalesces concurrent refreshes, and
+// serves extracted article renders. Persistence and the data model live in
+// internal/repository; HTTP in internal/server.
 package feeds
 
 import (
@@ -12,6 +16,8 @@ import (
 
 	"github.com/mmcdole/gofeed"
 	"golang.org/x/sync/singleflight"
+
+	"tinyrss/internal/repository"
 )
 
 const (
@@ -20,8 +26,7 @@ const (
 	userAgent   = "tinyrss/1.0"
 
 	// minRefreshGap throttles a manual refresh-all so feeds fetched within this
-	// window are skipped — a fixed ceiling keeps hammering the button from
-	// re-hitting recently fetched feeds. Make configurable only if needed.
+	// window are skipped, keeping a mashed refresh button from re-hitting them.
 	minRefreshGap = 10 * time.Minute
 )
 
@@ -42,7 +47,7 @@ type RefreshJob struct {
 // feed via singleflight, and runs a ticker that refreshes due feeds with a
 // bounded worker pool.
 type Fetcher struct {
-	repo      *Repo
+	repo      *repository.Repo
 	client    *http.Client
 	sf        singleflight.Group
 	sem       chan struct{}
@@ -53,7 +58,7 @@ type Fetcher struct {
 	job       RefreshJob
 }
 
-func NewFetcher(repo *Repo) *Fetcher {
+func NewFetcher(repo *repository.Repo) *Fetcher {
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -125,7 +130,7 @@ func (f *Fetcher) Stop() {
 // Reading a DATETIME column through the sqlite driver yields RFC3339; older
 // rows may hold "2006-01-02 15:04:05". Both are UTC instants, so parse and
 // compare against the now-based cutoff regardless of the local timezone.
-func lastFetched(fd Feed) time.Time {
+func lastFetched(fd repository.Feed) time.Time {
 	s := fd.LastFetchedAt
 	if s == "" {
 		return time.Time{}
@@ -133,7 +138,7 @@ func lastFetched(fd Feed) time.Time {
 	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
 		return t
 	}
-	if t, err := time.ParseInLocation(TimeLayout, s, time.UTC); err == nil {
+	if t, err := time.ParseInLocation(repository.TimeLayout, s, time.UTC); err == nil {
 		return t
 	}
 	return time.Time{}
@@ -207,7 +212,7 @@ func (f *Fetcher) RefreshAllAsync() error {
 	return nil
 }
 
-func (f *Fetcher) runRefreshAll(feeds []Feed) {
+func (f *Fetcher) runRefreshAll(feeds []repository.Feed) {
 	defer f.refreshWg.Done()
 	defer func() {
 		f.jobMu.Lock()
@@ -225,7 +230,7 @@ func (f *Fetcher) runRefreshAll(feeds []Feed) {
 			continue
 		}
 		wg.Add(1)
-		go func(fd Feed) {
+		go func(fd repository.Feed) {
 			defer wg.Done()
 			f.sem <- struct{}{}
 			defer func() { <-f.sem }()
@@ -239,7 +244,7 @@ func (f *Fetcher) runRefreshAll(feeds []Feed) {
 	wg.Wait()
 }
 
-func (f *Fetcher) setCurrent(fd Feed) {
+func (f *Fetcher) setCurrent(fd repository.Feed) {
 	f.jobMu.Lock()
 	f.job.CurrentID = fd.ID
 	f.job.CurrentTitle = fd.Title
@@ -306,25 +311,25 @@ func (f *Fetcher) doRefresh(id int) (int, error) {
 
 	resp, err := f.client.Do(req)
 	if err != nil {
-		_ = f.repo.recordFetchResult(id, "", "", err.Error(), false)
+		_ = f.repo.RecordFetchResult(id, "", "", err.Error(), false)
 		return 0, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotModified {
-		_ = f.repo.recordFetchResult(id, feed.ETag, feed.LastModified, "", true)
+		_ = f.repo.RecordFetchResult(id, feed.ETag, feed.LastModified, "", true)
 		return 0, nil
 	}
 	if resp.StatusCode != http.StatusOK {
 		msg := fmt.Sprintf("upstream returned %s", resp.Status)
-		_ = f.repo.recordFetchResult(id, "", "", msg, false)
+		_ = f.repo.RecordFetchResult(id, "", "", msg, false)
 		return 0, errors.New(msg)
 	}
 
 	pf, err := gofeed.NewParser().Parse(io.LimitReader(resp.Body, maxBodySize))
 	if err != nil {
 		msg := "feed did not parse as RSS/Atom: " + err.Error()
-		_ = f.repo.recordFetchResult(id, "", "", msg, false)
+		_ = f.repo.RecordFetchResult(id, "", "", msg, false)
 		return 0, err
 	}
 	items := normalizeItems(pf)
@@ -334,15 +339,15 @@ func (f *Fetcher) doRefresh(id int) (int, error) {
 	}
 	etag := resp.Header.Get("ETag")
 	lastMod := resp.Header.Get("Last-Modified")
-	_ = f.repo.recordFetchResult(id, etag, lastMod, "", true)
+	_ = f.repo.RecordFetchResult(id, etag, lastMod, "", true)
 	return newCount, nil
 }
 
 // normalizeItems maps a gofeed.Feed into our Item rows. GUID falls back to
 // link/title; malformed or missing dates fall back to now.
-func normalizeItems(pf *gofeed.Feed) []Item {
-	now := time.Now().UTC().Format(TimeLayout)
-	items := make([]Item, 0, len(pf.Items))
+func normalizeItems(pf *gofeed.Feed) []repository.Item {
+	now := time.Now().UTC().Format(repository.TimeLayout)
+	items := make([]repository.Item, 0, len(pf.Items))
 	for _, it := range pf.Items {
 		guid := it.GUID
 		if guid == "" {
@@ -357,13 +362,13 @@ func normalizeItems(pf *gofeed.Feed) []Item {
 		}
 		published := now
 		if pub != nil {
-			published = pub.UTC().Format(TimeLayout)
+			published = pub.UTC().Format(repository.TimeLayout)
 		}
 		author := ""
 		if it.Author != nil {
 			author = it.Author.Name
 		}
-		items = append(items, Item{
+		items = append(items, repository.Item{
 			GUID:        guid,
 			Title:       strings.TrimSpace(it.Title),
 			URL:         it.Link,

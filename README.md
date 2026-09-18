@@ -90,10 +90,11 @@ to loopback in that case. In dev (`make dev`) the token is fixed to `tinyrss`.
 ## Backend layout
 
 ```
-main.go                 wiring: config → db → feeds → server; graceful shutdown
+main.go                 wiring: config → db → repository → feeds → server; graceful shutdown
 internal/config         flags/env
 internal/store          SQLite open, PRAGMAs, versioned migrations
-internal/feeds          repository (folders/feeds/items), fetch+scheduler, search, OPML
+internal/repository     persistence + data model: folders/feeds/items, fetch logs, settings, OPML
+internal/feeds          fetch + scheduler + article render service
 internal/server         net/http router, handlers, auth middleware, embedded SPA
 ```
 

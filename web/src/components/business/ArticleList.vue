@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useVirtualList, useIntersectionObserver } from '@vueuse/core'
 import { injectItems, type Filter } from '../../providers/items'
+import { injectFeedsTree } from '../../providers/feedsTree'
 import { injectSelection } from '../../providers/selection'
 import type { Item } from '../../types/models'
 import Button from '../shared/Button.vue'
@@ -9,8 +10,10 @@ import EmptyState from '../shared/EmptyState.vue'
 import { useApiToast } from '../../api/useApiToast'
 
 const items = injectItems()
+const feeds = injectFeedsTree()
 const selection = injectSelection()
 const toast = useApiToast()
+const refreshing = ref(false)
 
 const ITEM_HEIGHT = 64
 const filterOptions: { value: Filter; label: string; icon: string }[] = [
@@ -62,25 +65,53 @@ async function markAllRead() {
   }
 }
 
+async function refreshFeed() {
+  const feedId = selection.state.feedId
+  if (feedId == null || refreshing.value) return
+  refreshing.value = true
+  try {
+    await feeds.refreshFeed(feedId)
+    await items.load()
+    toast.success('Feed refreshed')
+  } catch (e) {
+    toast.fromError(e)
+  } finally {
+    refreshing.value = false
+  }
+}
+
 const hasMore = computed(() => items.state.page * items.state.limit < items.state.total)
 </script>
 
 <template>
   <section class="artlist">
     <header class="artlist__toolbar">
-      <div class="tabs">
-        <button
-          v-for="opt in filterOptions"
-          :key="opt.value"
-          class="tab"
-          :class="{ active: items.state.filter === opt.value }"
-          @click="setFilter(opt.value)"
+      <div class="toolbar__top">
+        <div class="tabs">
+          <button
+            v-for="opt in filterOptions"
+            :key="opt.value"
+            class="tab"
+            :class="{ active: items.state.filter === opt.value }"
+            @click="setFilter(opt.value)"
+          >
+            <span aria-hidden="true" :class="opt.icon" />
+            {{ opt.label }}
+          </button>
+        </div>
+        <Button
+          v-if="selection.state.feedId != null"
+          variant="ghost"
+          size="sm"
+          :disabled="refreshing"
+          title="Refresh feed"
+          class="toolbar__refresh"
+          @click="refreshFeed"
         >
-          <span aria-hidden="true" :class="opt.icon" />
-          {{ opt.label }}
-        </button>
+          <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" :class="{ spin: refreshing }" />
+        </Button>
       </div>
-      <div class="toolbar__right">
+      <div class="toolbar__actions">
         <form @submit.prevent="runSearch" class="search">
           <span aria-hidden="true" class="i-lucide-search text-[14px] search__icon" />
           <input v-model="search" class="search__input" placeholder="Search…" aria-label="Search" />
@@ -133,16 +164,21 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
 }
 .artlist__toolbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
   padding: 8px 10px;
   border-bottom: 1px solid #eef0f4;
 }
+.toolbar__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .tabs {
   display: flex;
   gap: 4px;
-  flex: 1 1 100%;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .tab {
   display: inline-flex;
@@ -160,11 +196,13 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   background: #e3ecfd;
   color: #1f55c4;
 }
-.toolbar__right {
+.toolbar__refresh {
+  flex: 0 0 auto;
+}
+.toolbar__actions {
   display: flex;
   gap: 6px;
   align-items: center;
-  flex: 1 1 100%;
 }
 .search {
   display: flex;
@@ -243,5 +281,13 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
   text-align: center;
   font-size: 12px;
   color: #9aa2b0;
+}
+.spin {
+  animation: refresh-spin 1s linear infinite;
+}
+@keyframes refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

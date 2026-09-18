@@ -22,12 +22,7 @@ const open = defineModel<boolean>({ default: false })
 const emit = defineEmits<ConfirmDialogEmits>()
 
 const confirmAction = useLoading(async () => {
-  try {
-    await props.confirmFn?.()
-  } catch {
-    // Keep the dialog open so the action can be retried; the caller surfaces the error.
-    return
-  }
+  await props.confirmFn?.()
   open.value = false
 })
 

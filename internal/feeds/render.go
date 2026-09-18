@@ -29,21 +29,32 @@ func (f *Fetcher) FetchRender(rawURL string) ([]byte, error) {
 	}
 	key := u.String()
 	if cached, ok, _ := f.repo.GetRenderCache(key); ok {
-		return []byte(cached), nil
+		return cached, nil
 	}
-	body, err := f.fetchPage(u)
+	f.renderSem <- struct{}{}
+	defer func() { <-f.renderSem }()
+	v, err, _ := f.renderSf.Do(key, func() (any, error) {
+		if cached, ok, _ := f.repo.GetRenderCache(key); ok {
+			return cached, nil
+		}
+		body, err := f.fetchPage(u)
+		if err != nil {
+			return nil, err
+		}
+		title, inner := renderArticle(body, u)
+		out := wrapRender(title, key, inner)
+		// A failed write only loses this article's cache entry, not the response.
+		_ = f.repo.PutRenderCache(key, out)
+		return out, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	title, inner := renderArticle(body, u)
-	out := wrapRender(title, key, inner)
-	// A failed write only loses this article's cache entry, not the response.
-	_ = f.repo.PutRenderCache(key, string(out))
-	return out, nil
+	return v.([]byte), nil
 }
 
 func (f *Fetcher) fetchPage(u *url.URL) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	req, err := http.NewRequestWithContext(f.ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,7 @@
 package feeds
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -21,9 +22,10 @@ import (
 )
 
 const (
-	maxBodySize = 32 << 20 // cap fetched body: a runaway feed can't OOM us
-	workerCount = 4
-	userAgent   = "tinyrss/1.0"
+	maxBodySize   = 32 << 20 // cap fetched body: a runaway feed can't OOM us
+	workerCount   = 4
+	renderWorkers = 2
+	userAgent     = "tinyrss/1.0"
 
 	// minRefreshGap throttles a manual refresh-all so feeds fetched within this
 	// window are skipped, keeping a mashed refresh button from re-hitting them.
@@ -49,9 +51,15 @@ type RefreshJob struct {
 type Fetcher struct {
 	repo      *repository.Repo
 	client    *http.Client
+	ctx       context.Context
+	cancel    context.CancelFunc
 	sf        singleflight.Group
+	renderSf  singleflight.Group
 	sem       chan struct{}
+	renderSem chan struct{}
 	stopCh    chan struct{}
+	startOnce sync.Once
+	stopOnce  sync.Once
 	stopWg    sync.WaitGroup
 	refreshWg sync.WaitGroup
 	jobMu     sync.Mutex
@@ -61,6 +69,12 @@ type Fetcher struct {
 func NewFetcher(repo *repository.Repo) *Fetcher {
 	client := &http.Client{
 		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        workerCount * 2,
+			MaxIdleConnsPerHost: workerCount,
+			IdleConnTimeout:     90 * time.Second,
+			ForceAttemptHTTP2:   true,
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return errors.New("too many redirects")
@@ -68,33 +82,39 @@ func NewFetcher(repo *repository.Repo) *Fetcher {
 			return nil
 		},
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Fetcher{
-		repo:   repo,
-		client: client,
-		sem:    make(chan struct{}, workerCount),
+		repo:      repo,
+		client:    client,
+		ctx:       ctx,
+		cancel:    cancel,
+		sem:       make(chan struct{}, workerCount),
+		renderSem: make(chan struct{}, renderWorkers),
 	}
 }
 
 // Start launches the periodic refresh loop; Stop shuts it down gracefully.
 // RefreshFeed and RefreshAll remain callable without ever calling Start.
 func (f *Fetcher) Start(interval time.Duration) {
-	f.stopCh = make(chan struct{})
-	f.stopWg.Go(func() {
-		t := time.NewTicker(interval)
-		defer t.Stop()
-		for {
-			select {
-			case <-t.C:
-				f.maybePruneFetchLogs()
-				f.maybePruneRenderCache()
-				f.refreshDue(interval)
-			case <-f.stopCh:
-				return
+	f.startOnce.Do(func() {
+		f.stopCh = make(chan struct{})
+		f.stopWg.Go(func() {
+			t := time.NewTicker(interval)
+			defer t.Stop()
+			for {
+				select {
+				case <-t.C:
+					f.maybePruneFetchLogs()
+					f.maybePruneRenderCache()
+					f.refreshDue(interval)
+				case <-f.stopCh:
+					return
+				}
 			}
-		}
+		})
+		f.maybePruneFetchLogs()
+		f.maybePruneRenderCache()
 	})
-	f.maybePruneFetchLogs()
-	f.maybePruneRenderCache()
 }
 
 // maybePruneFetchLogs deletes logs older than the configured retention; a
@@ -119,19 +139,21 @@ func (f *Fetcher) maybePruneRenderCache() {
 }
 
 func (f *Fetcher) Stop() {
-	if f.stopCh != nil {
-		close(f.stopCh)
-	}
+	f.stopOnce.Do(func() {
+		f.cancel()
+		if f.stopCh != nil {
+			close(f.stopCh)
+		}
+	})
 	f.stopWg.Wait()
 	f.refreshWg.Wait()
 }
 
-// lastFetched parses a feed's recorded fetch time; zero means never fetched.
+// lastFetchedAt parses a feed's recorded fetch time; zero means never fetched.
 // Reading a DATETIME column through the sqlite driver yields RFC3339; older
 // rows may hold "2006-01-02 15:04:05". Both are UTC instants, so parse and
 // compare against the now-based cutoff regardless of the local timezone.
-func lastFetched(fd repository.Feed) time.Time {
-	s := fd.LastFetchedAt
+func lastFetchedAt(s string) time.Time {
 	if s == "" {
 		return time.Time{}
 	}
@@ -147,30 +169,53 @@ func lastFetched(fd repository.Feed) time.Time {
 // refreshDue refreshes every feed that has never been fetched or was last
 // fetched more than interval ago, with a bounded worker pool.
 func (f *Fetcher) refreshDue(interval time.Duration) {
-	feeds, err := f.repo.ListFeeds()
+	refs, err := f.repo.ListFeedRefs()
 	if err != nil {
 		return
 	}
 	cutoff := time.Now().Add(-interval)
-	due := make([]int, 0, len(feeds))
-	for _, fd := range feeds {
-		last := lastFetched(fd)
+	due := make([]int, 0, len(refs))
+	for _, ref := range refs {
+		last := lastFetchedAt(ref.LastFetchedAt)
 		if last.IsZero() || last.Before(cutoff) {
-			due = append(due, fd.ID)
+			due = append(due, ref.ID)
 		}
 	}
-	var wg sync.WaitGroup
-	for _, id := range due {
-		f.refreshWg.Add(1)
-		wg.Add(1)
-		go func(id int) {
-			defer f.refreshWg.Done()
-			defer wg.Done()
-			f.sem <- struct{}{}
-			defer func() { <-f.sem }()
-			_, _ = f.RefreshFeed(id)
-		}(id)
+	runPool(f, due, func(id int) {
+		_, _ = f.RefreshFeed(id)
+	})
+}
+
+// runPool consumes items with at most workerCount goroutines, so feed count
+// never translates into goroutine or in-flight-buffer growth.
+func runPool[T any](f *Fetcher, items []T, fn func(T)) {
+	workers := min(workerCount, len(items))
+	if workers == 0 {
+		return
 	}
+	jobs := make(chan T)
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for item := range jobs {
+				f.sem <- struct{}{}
+				fn(item)
+				<-f.sem
+			}
+		}()
+	}
+	for _, item := range items {
+		select {
+		case jobs <- item:
+		case <-f.ctx.Done():
+			close(jobs)
+			wg.Wait()
+			return
+		}
+	}
+	close(jobs)
 	wg.Wait()
 }
 
@@ -198,21 +243,21 @@ func (f *Fetcher) RefreshAllAsync() error {
 	}
 	f.jobMu.Unlock()
 
-	feeds, err := f.repo.ListFeeds()
+	refs, err := f.repo.ListFeedRefs()
 	if err != nil {
 		return err
 	}
 
 	f.jobMu.Lock()
-	f.job = RefreshJob{Running: true, Total: len(feeds)}
+	f.job = RefreshJob{Running: true, Total: len(refs)}
 	f.jobMu.Unlock()
 
 	f.refreshWg.Add(1)
-	go f.runRefreshAll(feeds)
+	go f.runRefreshAll(refs)
 	return nil
 }
 
-func (f *Fetcher) runRefreshAll(feeds []repository.Feed) {
+func (f *Fetcher) runRefreshAll(refs []repository.FeedRef) {
 	defer f.refreshWg.Done()
 	defer func() {
 		f.jobMu.Lock()
@@ -223,31 +268,27 @@ func (f *Fetcher) runRefreshAll(feeds []repository.Feed) {
 	}()
 
 	cutoff := time.Now().Add(-minRefreshGap)
-	var wg sync.WaitGroup
-	for _, fd := range feeds {
-		if last := lastFetched(fd); !last.IsZero() && !last.Before(cutoff) {
+	due := make([]repository.FeedRef, 0, len(refs))
+	for _, ref := range refs {
+		if last := lastFetchedAt(ref.LastFetchedAt); !last.IsZero() && !last.Before(cutoff) {
 			f.markDone(0, nil)
 			continue
 		}
-		wg.Add(1)
-		go func(fd repository.Feed) {
-			defer wg.Done()
-			f.sem <- struct{}{}
-			defer func() { <-f.sem }()
-			// Set current from inside the worker so the progress bar tracks a feed
-			// that is actually being fetched, not the last one merely dispatched.
-			f.setCurrent(fd)
-			newItems, err := f.RefreshFeed(fd.ID)
-			f.markDone(newItems, err)
-		}(fd)
+		due = append(due, ref)
 	}
-	wg.Wait()
+	runPool(f, due, func(ref repository.FeedRef) {
+		// Set current from inside the worker so the progress bar tracks a feed
+		// that is actually being fetched, not the last one merely dispatched.
+		f.setCurrent(ref)
+		newItems, err := f.RefreshFeed(ref.ID)
+		f.markDone(newItems, err)
+	})
 }
 
-func (f *Fetcher) setCurrent(fd repository.Feed) {
+func (f *Fetcher) setCurrent(ref repository.FeedRef) {
 	f.jobMu.Lock()
-	f.job.CurrentID = fd.ID
-	f.job.CurrentTitle = fd.Title
+	f.job.CurrentID = ref.ID
+	f.job.CurrentTitle = ref.Title
 	f.jobMu.Unlock()
 }
 
@@ -272,7 +313,7 @@ func (f *Fetcher) Progress() RefreshJob {
 // Probe downloads and parses a feed URL with no stored etag — used when adding
 // a feed, to validate the URL and capture metadata. Unparseable URLs error.
 func (f *Fetcher) Probe(url string) (*gofeed.Feed, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(f.ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +338,7 @@ func (f *Fetcher) doRefresh(id int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	req, err := http.NewRequest(http.MethodGet, feed.FeedURL, nil)
+	req, err := http.NewRequestWithContext(f.ctx, http.MethodGet, feed.FeedURL, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -311,6 +352,9 @@ func (f *Fetcher) doRefresh(id int) (int, error) {
 
 	resp, err := f.client.Do(req)
 	if err != nil {
+		if f.ctx.Err() != nil {
+			return 0, err
+		}
 		_ = f.repo.RecordFetchResult(id, "", "", err.Error(), false)
 		return 0, err
 	}

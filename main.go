@@ -61,11 +61,11 @@ func main() {
 	case <-sig:
 	}
 
-	fetcher.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := httpSrv.Shutdown(ctx); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
+	fetcher.Stop()
 	log.Print("shutdown complete")
 }

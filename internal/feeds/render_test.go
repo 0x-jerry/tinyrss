@@ -2,11 +2,14 @@ package feeds
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 const articlePage = `<!doctype html><html><head><title>Sample Article</title>
@@ -95,5 +98,86 @@ func TestFetchRenderFallbackForNonArticle(t *testing.T) {
 	}
 	if strings.Contains(body, "<script") {
 		t.Fatalf("fallback left a script tag: %s", body)
+	}
+}
+
+// TestRenderConcurrentSameURLCoalesces pins that simultaneous requests for one
+// article share a single upstream fetch/render.
+func TestRenderConcurrentSameURLCoalesces(t *testing.T) {
+	repo := newTestRepo(t)
+	f := NewFetcher(repo)
+
+	var hits int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&hits, 1)
+		time.Sleep(50 * time.Millisecond)
+		_, _ = w.Write([]byte(articlePage))
+	}))
+	t.Cleanup(srv.Close)
+	url := srv.URL + "/art"
+
+	const callers = 8
+	start := make(chan struct{})
+	results := make([][]byte, callers)
+	errs := make([]error, callers)
+	var wg sync.WaitGroup
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			results[i], errs[i] = f.FetchRender(url)
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	if n := atomic.LoadInt64(&hits); n != 1 {
+		t.Fatalf("upstream hits = %d, want 1 (coalesced)", n)
+	}
+	for i := range callers {
+		if errs[i] != nil {
+			t.Fatalf("caller %d: %v", i, errs[i])
+		}
+		if !bytes.Equal(results[i], results[0]) {
+			t.Fatalf("caller %d got different bytes", i)
+		}
+	}
+}
+
+// TestRenderConcurrencyBounded pins that distinct article fetches never exceed
+// renderWorkers in flight, so DOM trees and bodies stay bounded.
+func TestRenderConcurrencyBounded(t *testing.T) {
+	repo := newTestRepo(t)
+	f := NewFetcher(repo)
+
+	var inFlight, maxInFlight int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cur := atomic.AddInt32(&inFlight, 1)
+		for {
+			max := atomic.LoadInt32(&maxInFlight)
+			if cur <= max || atomic.CompareAndSwapInt32(&maxInFlight, max, cur) {
+				break
+			}
+		}
+		time.Sleep(30 * time.Millisecond)
+		atomic.AddInt32(&inFlight, -1)
+		_, _ = w.Write([]byte(articlePage))
+	}))
+	t.Cleanup(srv.Close)
+
+	const callers = 10
+	var wg sync.WaitGroup
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, _ = f.FetchRender(fmt.Sprintf("%s/art-%d", srv.URL, i))
+		}(i)
+	}
+	wg.Wait()
+
+	if got := atomic.LoadInt32(&maxInFlight); got > renderWorkers {
+		t.Fatalf("concurrent renders = %d, want <= %d", got, renderWorkers)
 	}
 }

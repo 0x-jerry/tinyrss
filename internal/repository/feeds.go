@@ -72,6 +72,36 @@ func (r *Repo) GetFeed(id int) (Feed, error) {
 	return f, err
 }
 
+// FeedRef is the scheduler's lightweight view of a feed: enough to decide due
+// status and label progress, without the unread count and metadata ListFeeds
+// loads for the API.
+type FeedRef struct {
+	ID            int
+	Title         string
+	LastFetchedAt string
+}
+
+func (r *Repo) ListFeedRefs() ([]FeedRef, error) {
+	rows, err := r.DB.Query(`SELECT id, title, last_fetched_at FROM feeds`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []FeedRef{}
+	for rows.Next() {
+		var ref FeedRef
+		var lastFetched sql.NullString
+		if err := rows.Scan(&ref.ID, &ref.Title, &lastFetched); err != nil {
+			return nil, err
+		}
+		if lastFetched.Valid {
+			ref.LastFetchedAt = lastFetched.String
+		}
+		out = append(out, ref)
+	}
+	return out, rows.Err()
+}
+
 func (r *Repo) ListFeeds() ([]Feed, error) {
 	rows, err := r.DB.Query(`SELECT ` + feedCols + ` FROM feeds ORDER BY title`)
 	if err != nil {

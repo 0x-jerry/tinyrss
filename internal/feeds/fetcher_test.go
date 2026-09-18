@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -274,5 +276,87 @@ func TestRefreshAllGapSkipsRecentFeeds(t *testing.T) {
 	mu.Unlock()
 	if got != 2 {
 		t.Fatalf("requests = %d, want 2 (aged feed refreshed)", got)
+	}
+}
+
+// TestRefreshAllBoundsGoroutines pins the fan-out: hundreds of feeds must not
+// become hundreds of waiting goroutines.
+func TestRefreshAllBoundsGoroutines(t *testing.T) {
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	free := func() { releaseOnce.Do(func() { close(release) }) }
+	defer free()
+
+	var inFlight int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&inFlight, 1)
+		<-release
+		_, _ = w.Write([]byte(rssXML))
+	}))
+	defer srv.Close()
+
+	repo := newTestRepo(t)
+	fetcher := NewFetcher(repo)
+	const feeds = 200
+	for i := 0; i < feeds; i++ {
+		if _, err := repo.CreateFeed(repository.Feed{
+			Title:   fmt.Sprintf("F%d", i),
+			FeedURL: fmt.Sprintf("%s/feed-%d.xml", srv.URL, i),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	baseline := runtime.NumGoroutine()
+	if err := fetcher.RefreshAllAsync(); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for atomic.LoadInt32(&inFlight) < workerCount {
+		if time.Now().After(deadline) {
+			t.Fatal("workers never saturated upstream")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := runtime.NumGoroutine(); got > baseline+50 {
+		t.Fatalf("goroutines = %d (baseline %d) for %d feeds; unbounded fan-out", got, baseline, feeds)
+	}
+	free()
+	waitIdle(t, fetcher)
+}
+
+// TestStopCancelsInFlightFetch pins that shutdown cancels the 30s client
+// timeout instead of waiting it out.
+func TestStopCancelsInFlightFetch(t *testing.T) {
+	blocked := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-blocked
+	}))
+	defer srv.Close()
+	defer close(blocked)
+
+	repo := newTestRepo(t)
+	fetcher := NewFetcher(repo)
+	feed, err := repo.CreateFeed(repository.Feed{Title: "F", FeedURL: srv.URL + "/feed.xml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = fetcher.RefreshFeed(feed.ID)
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	start := time.Now()
+	fetcher.Stop()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("RefreshFeed did not return after Stop")
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("Stop took %s, want prompt cancellation", d)
 	}
 }

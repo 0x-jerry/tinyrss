@@ -2,6 +2,7 @@ package repository
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,8 +29,8 @@ func TestStoreMigrationsApplied(t *testing.T) {
 	if err := st.DB.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
-	if n != 5 {
-		t.Fatalf("want 5 applied migrations, got %d", n)
+	if n != 6 {
+		t.Fatalf("want 6 applied migrations, got %d", n)
 	}
 }
 
@@ -357,6 +358,42 @@ func TestFetchLogsAndCleanupSettings(t *testing.T) {
 	}
 }
 
+// TestSetReadDoesNotRewriteFTS pins migration 0006: read/star toggles must not
+// churn the FTS index, while content updates still do.
+func TestSetReadDoesNotRewriteFTS(t *testing.T) {
+	repo := newTestRepo(t)
+	feed, err := repo.CreateFeed(Feed{Title: "F", FeedURL: "https://f.example/rss"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AddItems(feed.ID, []Item{{GUID: "g1", Title: "hello", Summary: "world", Content: "body"}}); err != nil {
+		t.Fatal(err)
+	}
+	items, _, err := repo.ListItems(ItemFilter{})
+	if err != nil || len(items) != 1 {
+		t.Fatalf("list: err=%v n=%d", err, len(items))
+	}
+	if err := repo.SetRead(items[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
+
+	var ddl string
+	if err := repo.DB.QueryRow(`SELECT sql FROM sqlite_master WHERE type='trigger' AND name='items_au'`).Scan(&ddl); err != nil {
+		t.Fatalf("trigger ddl: %v", err)
+	}
+	if !strings.Contains(ddl, "UPDATE OF title, summary, content") {
+		t.Fatalf("items_au not scoped to content columns: %s", ddl)
+	}
+
+	var found int
+	if err := repo.DB.QueryRow(`SELECT COUNT(*) FROM items_fts WHERE items_fts MATCH 'hello'`).Scan(&found); err != nil {
+		t.Fatalf("fts search: %v", err)
+	}
+	if found != 1 {
+		t.Fatalf("fts rows after read toggle = %d, want 1", found)
+	}
+}
+
 func TestRenderCache(t *testing.T) {
 	repo := newTestRepo(t)
 
@@ -364,20 +401,20 @@ func TestRenderCache(t *testing.T) {
 		t.Fatalf("unexpected cache hit: ok=%v err=%v", ok, err)
 	}
 
-	if err := repo.PutRenderCache("https://example.com/a", "<p>one</p>"); err != nil {
+	if err := repo.PutRenderCache("https://example.com/a", []byte("<p>one</p>")); err != nil {
 		t.Fatal(err)
 	}
-	if got, ok, err := repo.GetRenderCache("https://example.com/a"); err != nil || !ok || got != "<p>one</p>" {
+	if got, ok, err := repo.GetRenderCache("https://example.com/a"); err != nil || !ok || string(got) != "<p>one</p>" {
 		t.Fatalf("get after put = %q ok=%v err=%v", got, ok, err)
 	}
-	if err := repo.PutRenderCache("https://example.com/a", "<p>two</p>"); err != nil {
+	if err := repo.PutRenderCache("https://example.com/a", []byte("<p>two</p>")); err != nil {
 		t.Fatal(err)
 	}
-	if got, _, _ := repo.GetRenderCache("https://example.com/a"); got != "<p>two</p>" {
+	if got, _, _ := repo.GetRenderCache("https://example.com/a"); string(got) != "<p>two</p>" {
 		t.Fatalf("get after repopulate = %q, want <p>two</p>", got)
 	}
 
-	if err := repo.PutRenderCache("https://example.com/b", "<p>new</p>"); err != nil {
+	if err := repo.PutRenderCache("https://example.com/b", []byte("<p>new</p>")); err != nil {
 		t.Fatal(err)
 	}
 	pruned, err := repo.PruneRenderCache(time.Now().Add(24 * time.Hour)) // past all rows

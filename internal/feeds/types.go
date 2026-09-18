@@ -6,7 +6,10 @@ const TimeLayout = "2006-01-02 15:04:05"
 
 // defaultFetchLogCleanupDays is the initial auto-clean retention; 0 disables
 // cleanup. The value is user-adjustable via the settings API.
-const defaultFetchLogCleanupDays = 30
+const (
+	defaultFetchLogCleanupDays     = 30
+	defaultRenderCacheCleanupDays = 30
+)
 
 type Folder struct {
 	ID        int    `json:"id"`
@@ -43,9 +46,11 @@ type FetchLog struct {
 }
 
 // Settings holds the user-adjustable app settings. FetchLogCleanupDays is the
-// auto-clean retention in days; 0 disables cleanup.
+// auto-clean retention for fetch logs and RenderCacheCleanupDays the retention
+// for the server-render cache, both in days; 0 disables cleanup.
 type Settings struct {
-	FetchLogCleanupDays int `json:"fetch_log_cleanup_days"`
+	FetchLogCleanupDays     int `json:"fetch_log_cleanup_days"`
+	RenderCacheCleanupDays  int `json:"render_cache_cleanup_days"`
 }
 
 // Item is both the list and detail representation. Summary/Content are only

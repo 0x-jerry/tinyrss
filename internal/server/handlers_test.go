@@ -355,8 +355,11 @@ func TestSetRenderMode(t *testing.T) {
 func TestRenderEndpoint(t *testing.T) {
 	ts, _ := newTestServer(t)
 
-	page := `<html><head><title>Art</title></head><body><p>Hello article</p><img src="/pic.png"></body></html>`
+	page := `<html><head><title>Art</title><script>window.evil=1</script></head>
+		<body><p onclick="evil()">Hello article</p><img src="/pic.png"></body></html>`
+	var hits int
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
 		if r.URL.Path == "/err" {
 			http.Error(w, "boom", http.StatusInternalServerError)
 			return
@@ -380,11 +383,26 @@ func TestRenderEndpoint(t *testing.T) {
 	if csp := resp.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "sandbox") {
 		t.Fatalf("missing sandbox CSP: %q", csp)
 	}
+	if csp := resp.Header.Get("Content-Security-Policy"); strings.Contains(csp, "allow-scripts") {
+		t.Fatalf("CSP must not allow scripts: %q", csp)
+	}
 	if !strings.Contains(string(body), `<base href="`+upstream.URL+`/art">`) {
 		t.Fatalf("base not injected: %s", body)
 	}
 	if !strings.Contains(string(body), "Hello article") {
 		t.Fatalf("page body missing: %s", body)
+	}
+	if !strings.Contains(string(body), `class="tinyrss-article"`) {
+		t.Fatalf("custom styled wrapper missing: %s", body)
+	}
+	if strings.Contains(string(body), "<script") || strings.Contains(string(body), "onclick") {
+		t.Fatalf("scripts not stripped from rendered page: %s", body)
+	}
+
+	// A second render of the same URL is served from the DB cache.
+	do(t, ts, "GET", "/api/render?url="+url.QueryEscape(upstream.URL+"/art"), token, nil)
+	if hits != 1 {
+		t.Fatalf("upstream hits = %d, want 1 (cached)", hits)
 	}
 
 	// Non-http scheme → 400.
@@ -445,18 +463,29 @@ func TestSettingsAndFetchLogsEndpoints(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("get settings: %d %s", resp.StatusCode, body)
 	}
-	if s := decode[feeds.Settings](t, body); s.FetchLogCleanupDays != 30 {
-		t.Fatalf("default settings = %+v, want 30", s)
+	if s := decode[feeds.Settings](t, body); s.FetchLogCleanupDays != 30 || s.RenderCacheCleanupDays != 30 {
+		t.Fatalf("default settings = %+v, want both 30", s)
 	}
-	resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"fetch_log_cleanup_days":7}`))
+	// Partial updates apply only the present field and keep the other.
+	resp, body = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"fetch_log_cleanup_days":7}`))
 	if resp.StatusCode != 200 {
 		t.Fatalf("put settings: %d", resp.StatusCode)
 	}
-	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{}`)); resp.StatusCode != 400 {
-		t.Fatalf("missing days status = %d, want 400", resp.StatusCode)
+	if s := decode[feeds.Settings](t, body); s.FetchLogCleanupDays != 7 || s.RenderCacheCleanupDays != 30 {
+		t.Fatalf("settings after fetch update = %+v", s)
+	}
+	resp, body = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"render_cache_cleanup_days":14}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("put render settings: %d", resp.StatusCode)
+	}
+	if s := decode[feeds.Settings](t, body); s.FetchLogCleanupDays != 7 || s.RenderCacheCleanupDays != 14 {
+		t.Fatalf("settings after render update = %+v", s)
 	}
 	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"fetch_log_cleanup_days":-1}`)); resp.StatusCode != 400 {
-		t.Fatalf("negative days status = %d, want 400", resp.StatusCode)
+		t.Fatalf("negative fetch days status = %d, want 400", resp.StatusCode)
+	}
+	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"render_cache_cleanup_days":-1}`)); resp.StatusCode != 400 {
+		t.Fatalf("negative render days status = %d, want 400", resp.StatusCode)
 	}
 
 	// Fetch logs endpoint returns the recorded attempt.

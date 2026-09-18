@@ -148,7 +148,7 @@ function formatDate(iso: string): string {
         </Button>
       </div>
       <div v-if="kind === 'server'" class="reader__frame-wrap">
-        <iframe v-if="serverHtml" class="reader__frame" :srcdoc="serverHtml" sandbox="allow-scripts" title="Article" />
+        <iframe v-if="serverHtml" class="reader__frame" :srcdoc="serverHtml" sandbox="" title="Article" />
         <div v-else class="reader__frame-msg">{{ serverError || 'Loading…' }}</div>
       </div>
       <div v-else-if="kind === 'iframe'" class="reader__frame-wrap">

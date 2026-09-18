@@ -42,15 +42,15 @@ type RefreshJob struct {
 // feed via singleflight, and runs a ticker that refreshes due feeds with a
 // bounded worker pool.
 type Fetcher struct {
-	repo    *Repo
-	client  *http.Client
-	sf      singleflight.Group
-	sem     chan struct{}
-	stopCh  chan struct{}
-	stopWg  sync.WaitGroup
+	repo      *Repo
+	client    *http.Client
+	sf        singleflight.Group
+	sem       chan struct{}
+	stopCh    chan struct{}
+	stopWg    sync.WaitGroup
 	refreshWg sync.WaitGroup
-	jobMu   sync.Mutex
-	job     RefreshJob
+	jobMu     sync.Mutex
+	job       RefreshJob
 }
 
 func NewFetcher(repo *Repo) *Fetcher {
@@ -74,22 +74,22 @@ func NewFetcher(repo *Repo) *Fetcher {
 // RefreshFeed and RefreshAll remain callable without ever calling Start.
 func (f *Fetcher) Start(interval time.Duration) {
 	f.stopCh = make(chan struct{})
-	f.stopWg.Add(1)
-	go func() {
-		defer f.stopWg.Done()
+	f.stopWg.Go(func() {
 		t := time.NewTicker(interval)
 		defer t.Stop()
 		for {
 			select {
 			case <-t.C:
 				f.maybePruneFetchLogs()
+				f.maybePruneRenderCache()
 				f.refreshDue(interval)
 			case <-f.stopCh:
 				return
 			}
 		}
-	}()
+	})
 	f.maybePruneFetchLogs()
+	f.maybePruneRenderCache()
 }
 
 // maybePruneFetchLogs deletes logs older than the configured retention; a
@@ -100,6 +100,17 @@ func (f *Fetcher) maybePruneFetchLogs() {
 		return
 	}
 	_, _ = f.repo.PruneFetchLogs(time.Now().AddDate(0, 0, -s.FetchLogCleanupDays))
+}
+
+// maybePruneRenderCache expires cached server-rendered articles older than the
+// configured retention; a retention of 0 (disabled) or a settings read error
+// skips cleanup.
+func (f *Fetcher) maybePruneRenderCache() {
+	s, err := f.repo.GetSettings()
+	if err != nil || s.RenderCacheCleanupDays <= 0 {
+		return
+	}
+	_, _ = f.repo.PruneRenderCache(time.Now().AddDate(0, 0, -s.RenderCacheCleanupDays))
 }
 
 func (f *Fetcher) Stop() {

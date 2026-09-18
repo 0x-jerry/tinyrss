@@ -287,28 +287,83 @@ func (r *Repo) PruneFetchLogs(olderThan time.Time) (int64, error) {
 	return res.RowsAffected()
 }
 
-// GetSettings returns the user-adjustable settings, defaulting auto-clean on
-// (30 days) only when no value has ever been stored.
-func (r *Repo) GetSettings() (Settings, error) {
-	s := Settings{FetchLogCleanupDays: defaultFetchLogCleanupDays}
-	var v string
-	switch err := r.DB.QueryRow(`SELECT value FROM settings WHERE key = 'fetch_log_cleanup_days'`).Scan(&v); {
+// ---- render cache ----
+
+// GetRenderCache returns a previously cached server-render result for url. The
+// second return is false when nothing is cached for that URL.
+func (r *Repo) GetRenderCache(url string) (string, bool, error) {
+	var html string
+	switch err := r.DB.QueryRow(`SELECT html FROM render_cache WHERE url = ?`, url).Scan(&html); {
 	case err == sql.ErrNoRows:
-		return s, nil
+		return "", false, nil
 	case err != nil:
-		return s, err
+		return "", false, err
 	}
-	if n, err := strconv.Atoi(v); err == nil {
-		s.FetchLogCleanupDays = n
-	}
-	return s, nil
+	return html, true, nil
 }
 
-// SetFetchLogCleanupDays stores the auto-clean retention in days; 0 disables.
-func (r *Repo) SetFetchLogCleanupDays(days int) error {
-	_, err := r.DB.Exec(`INSERT INTO settings(key, value) VALUES ('fetch_log_cleanup_days', ?)
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value`, strconv.Itoa(days))
+// PutRenderCache stores (or refreshes) a server-render result for url.
+func (r *Repo) PutRenderCache(url, html string) error {
+	_, err := r.DB.Exec(`INSERT INTO render_cache(url, html, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(url) DO UPDATE SET html = excluded.html, created_at = CURRENT_TIMESTAMP`, url, html)
 	return err
+}
+
+// PruneRenderCache deletes cached renders older than the cutoff; returns rows removed.
+func (r *Repo) PruneRenderCache(olderThan time.Time) (int64, error) {
+	res, err := r.DB.Exec(`DELETE FROM render_cache WHERE created_at < ?`, olderThan.Format(TimeLayout))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// ---- settings ----
+
+// settingValue reads one settings row, defaulting to def when the key is
+// absent or unparsable.
+func (r *Repo) settingValue(key string, def int) (int, error) {
+	var v string
+	switch err := r.DB.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&v); {
+	case err == sql.ErrNoRows:
+		return def, nil
+	case err != nil:
+		return def, err
+	}
+	if n, err := strconv.Atoi(v); err == nil {
+		return n, nil
+	}
+	return def, nil
+}
+
+func (r *Repo) setSetting(key string, days int) error {
+	_, err := r.DB.Exec(`INSERT INTO settings(key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, strconv.Itoa(days))
+	return err
+}
+
+// GetSettings returns the auto-clean retentions, defaulting on (30 days) only
+// when no value has ever been stored for a key.
+func (r *Repo) GetSettings() (Settings, error) {
+	fl, err := r.settingValue("fetch_log_cleanup_days", defaultFetchLogCleanupDays)
+	if err != nil {
+		return Settings{}, err
+	}
+	rc, err := r.settingValue("render_cache_cleanup_days", defaultRenderCacheCleanupDays)
+	if err != nil {
+		return Settings{}, err
+	}
+	return Settings{FetchLogCleanupDays: fl, RenderCacheCleanupDays: rc}, nil
+}
+
+// SetFetchLogCleanupDays stores the fetch-log auto-clean retention; 0 disables.
+func (r *Repo) SetFetchLogCleanupDays(days int) error {
+	return r.setSetting("fetch_log_cleanup_days", days)
+}
+
+// SetRenderCacheCleanupDays stores the render-cache auto-clean retention; 0 disables.
+func (r *Repo) SetRenderCacheCleanupDays(days int) error {
+	return r.setSetting("render_cache_cleanup_days", days)
 }
 
 // ---- items ----

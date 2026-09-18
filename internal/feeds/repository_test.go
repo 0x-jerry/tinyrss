@@ -27,8 +27,8 @@ func TestStoreMigrationsApplied(t *testing.T) {
 	if err := st.DB.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
-	if n != 4 {
-		t.Fatalf("want 4 applied migrations, got %d", n)
+	if n != 5 {
+		t.Fatalf("want 5 applied migrations, got %d", n)
 	}
 }
 
@@ -204,5 +204,59 @@ func TestFetchLogsAndCleanupSettings(t *testing.T) {
 	}
 	if s.FetchLogCleanupDays != 7 {
 		t.Fatalf("cleanup days after set = %d, want 7", s.FetchLogCleanupDays)
+	}
+	if s.RenderCacheCleanupDays != 30 {
+		t.Fatalf("default render cache cleanup days = %d, want 30", s.RenderCacheCleanupDays)
+	}
+	if err := repo.SetRenderCacheCleanupDays(14); err != nil {
+		t.Fatal(err)
+	}
+	s, err = repo.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.RenderCacheCleanupDays != 14 {
+		t.Fatalf("render cache cleanup days after set = %d, want 14", s.RenderCacheCleanupDays)
+	}
+	if s.FetchLogCleanupDays != 7 {
+		t.Fatalf("fetch log cleanup days regressed to %d after render set", s.FetchLogCleanupDays)
+	}
+}
+
+func TestRenderCache(t *testing.T) {
+	repo := newTestRepo(t)
+
+	// Miss on an unknown URL.
+	if _, ok, err := repo.GetRenderCache("https://example.com/a"); err != nil || ok {
+		t.Fatalf("unexpected cache hit: ok=%v err=%v", ok, err)
+	}
+
+	// Put then get round-trips; putting again refreshes the value.
+	if err := repo.PutRenderCache("https://example.com/a", "<p>one</p>"); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok, err := repo.GetRenderCache("https://example.com/a"); err != nil || !ok || got != "<p>one</p>" {
+		t.Fatalf("get after put = %q ok=%v err=%v", got, ok, err)
+	}
+	if err := repo.PutRenderCache("https://example.com/a", "<p>two</p>"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := repo.GetRenderCache("https://example.com/a"); got != "<p>two</p>" {
+		t.Fatalf("get after repopulate = %q, want <p>two</p>", got)
+	}
+
+	// Prune removes only rows older than the cutoff.
+	if err := repo.PutRenderCache("https://example.com/b", "<p>new</p>"); err != nil {
+		t.Fatal(err)
+	}
+	pruned, err := repo.PruneRenderCache(time.Now().Add(24 * time.Hour)) // past all rows
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pruned != 2 {
+		t.Fatalf("pruned = %d, want 2", pruned)
+	}
+	if _, ok, _ := repo.GetRenderCache("https://example.com/a"); ok {
+		t.Fatal("rendered article still cached after prune")
 	}
 }

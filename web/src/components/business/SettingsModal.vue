@@ -34,6 +34,7 @@ const filteredLogs = computed(() =>
 )
 
 const cleanupDays = ref(30)
+const renderCleanupDays = ref(30)
 const settingsLoading = ref(false)
 
 watch(open, (isOpen) => {
@@ -47,6 +48,7 @@ async function loadSettings() {
   try {
     const s = await api.getSettings()
     cleanupDays.value = s.fetch_log_cleanup_days
+    renderCleanupDays.value = s.render_cache_cleanup_days
   } catch (e) {
     toast.fromError(e)
   } finally {
@@ -60,6 +62,19 @@ async function saveCleanupDays() {
   try {
     await api.updateSettings({ fetch_log_cleanup_days: days })
     toast.success(days > 0 ? `Auto-clean set to ${days} day${days === 1 ? '' : 's'}` : 'Auto-clean off')
+  } catch (e) {
+    toast.fromError(e)
+  }
+}
+
+async function saveRenderCleanupDays() {
+  const days = Math.max(0, Math.floor(Number(renderCleanupDays.value) || 0))
+  renderCleanupDays.value = days
+  try {
+    await api.updateSettings({ render_cache_cleanup_days: days })
+    toast.success(
+      days > 0 ? `Render cache retention set to ${days} day${days === 1 ? '' : 's'}` : 'Render cache never cleaned',
+    )
   } catch (e) {
     toast.fromError(e)
   }
@@ -197,28 +212,47 @@ function downloadText(filename: string, text: string, mime: string) {
       <section class="section" aria-labelledby="retention-title">
         <div class="section__heading">
           <div>
-            <h4 id="retention-title" class="section__title">Fetch log retention</h4>
-            <p class="section__description">Choose how long completed fetch attempts are kept.</p>
+            <h4 id="retention-title" class="section__title">Auto-clean</h4>
+            <p class="section__description">Choose how long data is kept before it's automatically removed.</p>
           </div>
-          <span aria-hidden="true" class="section__icon i-lucide-clock" />
+          <span aria-hidden="true" class="section__icon i-lucide-trash-2" />
         </div>
-        <label class="retention">
-          <span class="retention__label">Auto-clean logs older than</span>
-          <span class="retention__control">
-            <input
-              v-model.number="cleanupDays"
-              class="retention__input"
-              type="number"
-              min="0"
-              step="1"
-              :disabled="settingsLoading"
-              aria-label="Auto-clean fetch logs older than (days)"
-              @change="saveCleanupDays"
-            />
-            <span class="retention__unit">days</span>
-          </span>
-          <span class="retention__hint">Set to 0 to keep logs indefinitely.</span>
-        </label>
+        <div class="retention-list">
+          <label class="retention">
+            <span class="retention__label">Fetch logs older than</span>
+            <span class="retention__control">
+              <input
+                v-model.number="cleanupDays"
+                class="retention__input"
+                type="number"
+                min="0"
+                step="1"
+                :disabled="settingsLoading"
+                aria-label="Auto-clean fetch logs older than (days)"
+                @change="saveCleanupDays"
+              />
+              <span class="retention__unit">days</span>
+            </span>
+            <span class="retention__hint">Set to 0 to keep logs indefinitely.</span>
+          </label>
+          <label class="retention">
+            <span class="retention__label">Render cache older than</span>
+            <span class="retention__control">
+              <input
+                v-model.number="renderCleanupDays"
+                class="retention__input"
+                type="number"
+                min="0"
+                step="1"
+                :disabled="settingsLoading"
+                aria-label="Auto-clean render cache older than (days)"
+                @change="saveRenderCleanupDays"
+              />
+              <span class="retention__unit">days</span>
+            </span>
+            <span class="retention__hint">Set to 0 to never clean cached articles.</span>
+          </label>
+        </div>
       </section>
 
         </div>
@@ -304,7 +338,7 @@ function downloadText(filename: string, text: string, mime: string) {
   flex: 1;
   display: flex;
   min-width: 0;
-  height: 440px;
+  height: 524px;
 }
 .intro {
   display: flex;
@@ -472,6 +506,15 @@ function downloadText(filename: string, text: string, mime: string) {
   grid-column: 1 / -1;
   justify-content: center;
   width: 100%;
+}
+.retention-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.retention-list .retention + .retention {
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
 }
 .retention {
   display: grid;

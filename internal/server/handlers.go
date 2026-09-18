@@ -367,7 +367,7 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "sandbox allow-scripts allow-forms; referrer no-referrer")
+	w.Header().Set("Content-Security-Policy", "sandbox; referrer no-referrer")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(body)
@@ -462,18 +462,31 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		FetchLogCleanupDays *int `json:"fetch_log_cleanup_days"`
+		FetchLogCleanupDays    *int `json:"fetch_log_cleanup_days"`
+		RenderCacheCleanupDays *int `json:"render_cache_cleanup_days"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
 	}
-	if body.FetchLogCleanupDays == nil || *body.FetchLogCleanupDays < 0 {
-		writeError(w, http.StatusBadRequest, "fetch_log_cleanup_days must be a non-negative integer")
-		return
+	if body.FetchLogCleanupDays != nil {
+		if *body.FetchLogCleanupDays < 0 {
+			writeError(w, http.StatusBadRequest, "fetch_log_cleanup_days must be a non-negative integer")
+			return
+		}
+		if err := s.repo.SetFetchLogCleanupDays(*body.FetchLogCleanupDays); err != nil {
+			s.serverError(w, err)
+			return
+		}
 	}
-	if err := s.repo.SetFetchLogCleanupDays(*body.FetchLogCleanupDays); err != nil {
-		s.serverError(w, err)
-		return
+	if body.RenderCacheCleanupDays != nil {
+		if *body.RenderCacheCleanupDays < 0 {
+			writeError(w, http.StatusBadRequest, "render_cache_cleanup_days must be a non-negative integer")
+			return
+		}
+		if err := s.repo.SetRenderCacheCleanupDays(*body.RenderCacheCleanupDays); err != nil {
+			s.serverError(w, err)
+			return
+		}
 	}
 	settings, err := s.repo.GetSettings()
 	if err != nil {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildContentDocument } from '../src/contentDoc'
+import { buildContentDocument } from '../src/helpers'
 
 describe('buildContentDocument', () => {
   const doc = buildContentDocument('<p>Hello</p>')

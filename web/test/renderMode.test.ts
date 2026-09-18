@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { renderKind, RenderMode } from '../src/renderMode'
+import { renderKind, RenderMode } from '../src/helpers'
 
 describe('renderKind', () => {
   it('maps modes to render kinds', () => {

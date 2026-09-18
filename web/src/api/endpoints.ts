@@ -14,72 +14,44 @@ import type {
 
 export type ItemAction = 'read' | 'unread' | 'star' | 'unstar'
 
-export interface ItemsApi {
-  listItems(query: string): Promise<ItemsResponse>
-  getItem(id: number): Promise<ItemDetail>
-  setItemState(id: number, action: ItemAction): Promise<void>
-  readAll(feedId: number | null, folderId: number | null): Promise<ReadAllResult>
-}
-
-export interface FeedsTreeApi {
-  listFeeds(): Promise<Feed[]>
-  listFolders(): Promise<Folder[]>
-  createFeed(feedUrl: string): Promise<Feed>
-  updateFeed(id: number, title: string, folderId: number | null): Promise<Feed>
-  deleteFeed(id: number): Promise<void>
-  refreshFeed(id: number): Promise<FeedRefreshResult>
-  setFeedRenderMode(id: number, mode: number): Promise<Feed>
-  refreshAllFeeds(): Promise<RefreshResult>
-  readAll(feedId: number | null, folderId: number | null): Promise<ReadAllResult>
-  createFolder(name: string): Promise<Folder>
-  updateFolder(id: number, name: string): Promise<Folder>
-  deleteFolder(id: number): Promise<void>
-  importOpml(form: FormData): Promise<OpmlImportResult>
-  exportOpml(): Promise<string>
-}
-
 function readAllQuery(feedId: number | null, folderId: number | null): string {
   if (feedId != null) return `?feed_id=${feedId}`
   if (folderId != null) return `?folder_id=${folderId}`
   return ''
 }
 
-export const api: ItemsApi & FeedsTreeApi & {
-  getFeed: (id: number) => Promise<Feed>
-  renderUrl: (url: string) => Promise<string>
-  importOpml: (form: FormData) => Promise<OpmlImportResult>
-  exportOpml: () => Promise<string>
-  health: () => Promise<Health>
-  stats: () => Promise<Stats>
-} = {
+export const api = {
   // Feeds
   listFeeds: () => request<Feed[]>('GET', '/api/feeds'),
-  createFeed: (feedUrl) => request<Feed>('POST', '/api/feeds', { feed_url: feedUrl }),
-  getFeed: (id) => request<Feed>('GET', `/api/feeds/${id}`),
-  updateFeed: (id, title, folderId) => request<Feed>('PUT', `/api/feeds/${id}`, { title, folder_id: folderId }),
-  deleteFeed: (id) => request<void>('DELETE', `/api/feeds/${id}`),
-  refreshFeed: (id) => request<FeedRefreshResult>('POST', `/api/feeds/${id}/refresh`),
-  setFeedRenderMode: (id, mode) => request<Feed>('POST', `/api/feeds/${id}/render-mode`, { render_mode: mode }),
+  createFeed: (feedUrl: string) => request<Feed>('POST', '/api/feeds', { feed_url: feedUrl }),
+  getFeed: (id: number) => request<Feed>('GET', `/api/feeds/${id}`),
+  updateFeed: (id: number, title: string, folderId: number | null) =>
+    request<Feed>('PUT', `/api/feeds/${id}`, { title, folder_id: folderId }),
+  deleteFeed: (id: number) => request<void>('DELETE', `/api/feeds/${id}`),
+  refreshFeed: (id: number) => request<FeedRefreshResult>('POST', `/api/feeds/${id}/refresh`),
+  setFeedRenderMode: (id: number, mode: number) =>
+    request<Feed>('POST', `/api/feeds/${id}/render-mode`, { render_mode: mode }),
 
   // Folders
   listFolders: () => request<Folder[]>('GET', '/api/folders'),
-  createFolder: (name) => request<Folder>('POST', '/api/folders', { name }),
-  updateFolder: (id, name) => request<Folder>('PUT', `/api/folders/${id}`, { name }),
-  deleteFolder: (id) => request<void>('DELETE', `/api/folders/${id}`),
+  createFolder: (name: string) => request<Folder>('POST', '/api/folders', { name }),
+  updateFolder: (id: number, name: string) => request<Folder>('PUT', `/api/folders/${id}`, { name }),
+  deleteFolder: (id: number) => request<void>('DELETE', `/api/folders/${id}`),
 
   // Items
-  listItems: (query) => request<ItemsResponse>('GET', `/api/items?${query}`),
-  getItem: (id) => request<ItemDetail>('GET', `/api/items/${id}`),
-  setItemState: (id, action) => request<void>('POST', `/api/items/${id}/${action}`),
-  readAll: (feedId, folderId) => request<ReadAllResult>('POST', `/api/items/read-all${readAllQuery(feedId, folderId)}`),
+  listItems: (query: string) => request<ItemsResponse>('GET', `/api/items?${query}`),
+  getItem: (id: number) => request<ItemDetail>('GET', `/api/items/${id}`),
+  setItemState: (id: number, action: ItemAction) => request<void>('POST', `/api/items/${id}/${action}`),
+  readAll: (feedId: number | null, folderId: number | null) =>
+    request<ReadAllResult>('POST', `/api/items/read-all${readAllQuery(feedId, folderId)}`),
 
   // Render
-  renderUrl: (url) => requestText('GET', `/api/render?url=${encodeURIComponent(url)}`),
+  renderUrl: (url: string) => requestText('GET', `/api/render?url=${encodeURIComponent(url)}`),
 
   // System
   refreshAllFeeds: () => request<RefreshResult>('POST', '/api/refresh'),
   health: () => request<Health>('GET', '/api/health'),
   stats: () => request<Stats>('GET', '/api/stats'),
-  importOpml: (form) => request<OpmlImportResult>('POST', '/api/opml/import', form),
+  importOpml: (form: FormData) => request<OpmlImportResult>('POST', '/api/opml/import', form),
   exportOpml: () => requestText('GET', '/api/opml/export'),
 }

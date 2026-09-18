@@ -3,7 +3,7 @@ import { useLocalStorage } from '@vueuse/core'
 import { itemsKey } from './keys'
 import type { SelectionProvider } from './selection'
 import type { FeedsTreeProvider } from './feedsTree'
-import { api, type ItemsApi } from '../api/endpoints'
+import { api } from '../api/endpoints'
 import type { Item, ItemDetail } from '../types/models'
 
 export type Filter = 'all' | 'unread' | 'starred'
@@ -50,7 +50,6 @@ export interface ItemsState {
 }
 
 export interface ItemsDeps {
-  apiObj?: ItemsApi
   getSelection: () => { feedId: number | null; folderId: number | null }
   selectItem?: (id: number) => void
   onItemsChanged?: () => void
@@ -91,7 +90,6 @@ export function buildItemQuery(
 }
 
 export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
-  const apiObj = deps.apiObj ?? api
   // Each feed/folder (and "all articles") remembers its own filter.
   const filters = useLocalStorage<Partial<Record<ScopeKey, Filter>>>(SCOPE_FILTERS_KEY, {}, {
     serializer: scopeFiltersSerializer,
@@ -125,7 +123,7 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
     raw.loading = true
     try {
       const currentFilter = raw.filter
-      const res = await apiObj.listItems(buildItemQuery(deps.getSelection(), currentFilter, raw.search, page, raw.limit))
+      const res = await api.listItems(buildItemQuery(deps.getSelection(), currentFilter, raw.search, page, raw.limit))
       // Unread is the default filter; on a default load, when nothing is unread
       // in the current scope, fall back to showing everything instead of an
       // empty list. An explicit filter choice (setFilter) is never overridden.
@@ -155,11 +153,11 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
   async function setItemRead(id: number, read: boolean) {
     patch(id, { is_read: read })
     notify()
-    await apiObj.setItemState(id, read ? 'read' : 'unread')
+    await api.setItemState(id, read ? 'read' : 'unread')
   }
   async function setItemStarred(id: number, starred: boolean) {
     patch(id, { is_starred: starred })
-    await apiObj.setItemState(id, starred ? 'star' : 'unstar')
+    await api.setItemState(id, starred ? 'star' : 'unstar')
   }
 
   function findItem(id: number) {
@@ -187,11 +185,11 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
       // select + open in a single action: selecting drives the highlight/persist,
       // then the detail is fetched and marked read optimistically.
       deps.selectItem?.(id)
-      const detail = await apiObj.getItem(id)
+      const detail = await api.getItem(id)
       raw.selectedItem = detail
       patch(id, { is_read: true })
       notify()
-      await apiObj.setItemState(id, 'read')
+      await api.setItemState(id, 'read')
     },
     toggleRead: async (id) => {
       const item = findItem(id)
@@ -208,7 +206,7 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
     star: (id) => setItemStarred(id, true),
     unstar: (id) => setItemStarred(id, false),
     markAllRead: async () => {
-      await apiObj.readAll(deps.getSelection().feedId, deps.getSelection().folderId)
+      await api.readAll(deps.getSelection().feedId, deps.getSelection().folderId)
       raw.items.forEach((i) => (i.is_read = true))
       notify()
     },

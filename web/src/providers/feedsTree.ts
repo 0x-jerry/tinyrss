@@ -1,6 +1,6 @@
 import { inject, reactive, readonly, provide, type DeepReadonly } from 'vue'
 import { feedsTreeKey } from './keys'
-import { api, type FeedsTreeApi } from '../api/endpoints'
+import { api } from '../api/endpoints'
 import type { Feed, Folder } from '../types/models'
 
 export interface FolderNode {
@@ -68,7 +68,7 @@ export interface FeedsTreeProvider {
   exportOpmlText: () => Promise<string>
 }
 
-export function createFeedsTreeProvider(apiObj: FeedsTreeApi = api): FeedsTreeProvider {
+export function createFeedsTreeProvider(): FeedsTreeProvider {
   const raw = reactive<FeedsTreeState>({
     feeds: [],
     folders: [],
@@ -91,7 +91,7 @@ export function createFeedsTreeProvider(apiObj: FeedsTreeApi = api): FeedsTreePr
   async function reload() {
     raw.loading = true
     try {
-      const [feeds, folders] = await Promise.all([apiObj.listFeeds(), apiObj.listFolders()])
+      const [feeds, folders] = await Promise.all([api.listFeeds(), api.listFolders()])
       apply(feeds, folders)
     } finally {
       raw.loading = false
@@ -102,59 +102,59 @@ export function createFeedsTreeProvider(apiObj: FeedsTreeApi = api): FeedsTreePr
     state: readonly(raw),
     reload,
     async addFeed(feedUrl) {
-      const feed = await apiObj.createFeed(feedUrl)
+      const feed = await api.createFeed(feedUrl)
       await reload()
       return feed
     },
     renameFeed: async (id, title) => {
       const feed = raw.feeds.find((f) => f.id === id)
-      await apiObj.updateFeed(id, title, feed?.folder_id ?? null)
+      await api.updateFeed(id, title, feed?.folder_id ?? null)
       await reload()
     },
     deleteFeed: async (id) => {
-      await apiObj.deleteFeed(id)
+      await api.deleteFeed(id)
       await reload()
     },
     moveFeed: async (id, folderId) => {
       const feed = raw.feeds.find((f) => f.id === id)
-      await apiObj.updateFeed(id, feed?.title ?? '', folderId)
+      await api.updateFeed(id, feed?.title ?? '', folderId)
       await reload()
     },
     addFolder: async (name) => {
-      await apiObj.createFolder(name)
+      await api.createFolder(name)
       await reload()
     },
     renameFolder: async (id, name) => {
-      await apiObj.updateFolder(id, name)
+      await api.updateFolder(id, name)
       await reload()
     },
     deleteFolder: async (id) => {
-      await apiObj.deleteFolder(id)
+      await api.deleteFolder(id)
       await reload()
     },
     refreshAll: async () => {
-      await apiObj.refreshAllFeeds()
+      await api.refreshAllFeeds()
       await reload()
     },
     refreshFeed: async (id) => {
-      await apiObj.refreshFeed(id)
+      await api.refreshFeed(id)
       await reload()
     },
     setRenderMode: async (id, mode) => {
-      const updated = await apiObj.setFeedRenderMode(id, mode)
+      const updated = await api.setFeedRenderMode(id, mode)
       const feed = raw.feeds.find((f) => f.id === id)
       if (feed) feed.render_mode = updated.render_mode
     },
     markAllRead: async () => {
-      await apiObj.readAll(null, null)
+      await api.readAll(null, null)
       await reload()
     },
     importOpmlForm: async (form) => {
-      const res = await apiObj.importOpml(form)
+      const res = await api.importOpml(form)
       await reload()
       return res.added
     },
-    exportOpmlText: () => apiObj.exportOpml(),
+    exportOpmlText: () => api.exportOpml(),
   }
 }
 

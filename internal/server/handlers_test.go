@@ -130,7 +130,9 @@ func TestFeedLifecycleAndItems(t *testing.T) {
 		t.Fatalf("create feed: %d %s", resp.StatusCode, body)
 	}
 	feed := decode[repository.Feed](t, body)
-	if feed.ID == 0 || feed.Title != "Example Blog" || feed.Unread != 1 {
+	// No content is fetched on create: the title falls back to the URL and the
+	// feed has no items yet.
+	if feed.ID == 0 || feed.Title != feedSrv.URL+"/feed" || feed.Unread != 0 {
 		t.Fatalf("unexpected feed %+v", feed)
 	}
 
@@ -138,18 +140,19 @@ func TestFeedLifecycleAndItems(t *testing.T) {
 		_, _ = w.Write([]byte("<html>not a feed</html>"))
 	}))
 	defer bad.Close()
+	// An unverified URL is stored as-is; create performs no fetch.
 	resp, body = do(t, ts, "POST", "/api/feeds", token, strings.NewReader(`{"feed_url":"`+bad.URL+`/x"}`))
-	if resp.StatusCode != 422 {
-		t.Fatalf("bad feed status = %d, body=%s", resp.StatusCode, body)
+	if resp.StatusCode != 200 {
+		t.Fatalf("unverified feed create status = %d, body=%s", resp.StatusCode, body)
 	}
 
-	// Refresh returns the new-item count after the feed is already fetched.
+	// A manual refresh ingests the item.
 	resp, body = do(t, ts, "POST", "/api/feeds/"+itoa(feed.ID)+"/refresh", token, nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("refresh: %d %s", resp.StatusCode, body)
 	}
 	ref := decode[map[string]any](t, body)
-	if ref["new_items"].(float64) != 0 {
+	if ref["new_items"].(float64) != 1 {
 		t.Fatalf("refresh new_items = %v", ref["new_items"])
 	}
 
@@ -261,8 +264,11 @@ func TestUpdateFeed(t *testing.T) {
 	}))
 	defer bad.Close()
 	resp, body = do(t, ts, "PUT", "/api/feeds/"+itoa(feed.ID), token, strings.NewReader(`{"title":"Renamed","feed_url":"`+bad.URL+`/x"}`))
-	if resp.StatusCode != 422 {
-		t.Fatalf("bad feed url status = %d, body=%s", resp.StatusCode, body)
+	if resp.StatusCode != 200 {
+		t.Fatalf("changed feed url status = %d, body=%s", resp.StatusCode, body)
+	}
+	if decode[repository.Feed](t, body).FeedURL != bad.URL+"/x" {
+		t.Fatalf("feed_url not stored as-is: %s", body)
 	}
 
 	resp, body = do(t, ts, "POST", "/api/feeds", token, strings.NewReader(`{"feed_url":"`+feedSrv.URL+`/feed3"}`))
@@ -272,6 +278,35 @@ func TestUpdateFeed(t *testing.T) {
 	resp, body = do(t, ts, "PUT", "/api/feeds/"+itoa(feed.ID), token, strings.NewReader(`{"title":"Renamed","feed_url":"`+feedSrv.URL+`/feed3"}`))
 	if resp.StatusCode != 409 {
 		t.Fatalf("duplicate feed url status = %d, body=%s", resp.StatusCode, body)
+	}
+}
+
+func TestDiscoverFeed(t *testing.T) {
+	ts, _ := newTestServer(t)
+	feedSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = w.Write([]byte(testRSS))
+	}))
+	defer feedSrv.Close()
+
+	resp, body := do(t, ts, "POST", "/api/feeds/discover", token, strings.NewReader(`{"url":"`+feedSrv.URL+`/feed"}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("discover: %d %s", resp.StatusCode, body)
+	}
+	d := decode[feeds.Discovered](t, body)
+	if d.Title != "Example Blog" || d.SiteURL != "https://example.com/" || d.Description != "desc" {
+		t.Fatalf("unexpected discover result %+v", d)
+	}
+	if d.FeedURL != feedSrv.URL+"/feed" {
+		t.Fatalf("feed_url = %q", d.FeedURL)
+	}
+
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("<html>not a feed</html>"))
+	}))
+	defer bad.Close()
+	if resp, _ := do(t, ts, "POST", "/api/feeds/discover", token, strings.NewReader(`{"url":"`+bad.URL+`/x"}`)); resp.StatusCode != 422 {
+		t.Fatalf("bad discover status = %d", resp.StatusCode)
 	}
 }
 

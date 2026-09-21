@@ -1,5 +1,6 @@
 import { request, requestText } from './client'
 import type {
+  DiscoveredFeed,
   Feed,
   FeedRefreshResult,
   FetchLog,
@@ -16,6 +17,14 @@ import type {
 
 export type ItemAction = 'read' | 'unread' | 'star' | 'unstar'
 
+export interface CreateFeedPatch {
+  feed_url: string
+  title?: string
+  site_url?: string
+  description?: string
+  folder_id?: number | null
+}
+
 function readAllQuery(feedId: number | null, folderId: number | null): string {
   if (feedId != null) return `?feed_id=${feedId}`
   if (folderId != null) return `?folder_id=${folderId}`
@@ -25,8 +34,8 @@ function readAllQuery(feedId: number | null, folderId: number | null): string {
 export const api = {
   // Feeds
   listFeeds: () => request<Feed[]>('GET', '/api/feeds'),
-  createFeed: (feedUrl: string, folderId?: number | null) =>
-    request<Feed>('POST', '/api/feeds', { feed_url: feedUrl, folder_id: folderId ?? null }),
+  createFeed: (patch: CreateFeedPatch) => request<Feed>('POST', '/api/feeds', patch),
+  discoverFeed: (url: string) => request<DiscoveredFeed>('POST', '/api/feeds/discover', { url }),
   getFeed: (id: number) => request<Feed>('GET', `/api/feeds/${id}`),
   updateFeed: (
     id: number,

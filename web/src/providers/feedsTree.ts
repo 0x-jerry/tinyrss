@@ -51,6 +51,14 @@ export interface UpdateFeedPatch {
   folder_id?: number | null
 }
 
+export interface AddFeedPatch {
+  feed_url: string
+  title?: string
+  site_url?: string
+  description?: string
+  folder_id?: number | null
+}
+
 export interface RefreshState {
   running: boolean
   total: number
@@ -71,7 +79,7 @@ export interface FeedsTreeState {
 export interface FeedsTreeProvider {
   state: DeepReadonly<FeedsTreeState>
   reload: () => Promise<void>
-  addFeed: (feedUrl: string, folderId?: number | null) => Promise<Feed>
+  addFeed: (patch: AddFeedPatch) => Promise<Feed>
   updateFeed: (id: number, patch: UpdateFeedPatch) => Promise<void>
   deleteFeed: (id: number) => Promise<void>
   moveFeed: (id: number, folderId: number | null) => Promise<void>
@@ -143,8 +151,8 @@ export function createFeedsTreeProvider(): FeedsTreeProvider {
   return {
     state: readonly(raw),
     reload,
-    async addFeed(feedUrl, folderId = null) {
-      const feed = await api.createFeed(feedUrl, folderId)
+    async addFeed(patch: AddFeedPatch) {
+      const feed = await api.createFeed(patch)
       await reload()
       return feed
     },

@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { injectFeedsTree } from '../../providers/feedsTree'
 import { useApiToast } from '../../api/useApiToast'
+import { api } from '../../api/endpoints'
 import { useLoading } from '../../composables/useLoading'
 import type { Feed } from '../../types/models'
 import Modal from '../shared/Modal.vue'
@@ -54,6 +55,23 @@ const save = useLoading(async () => {
     toast.fromError(e)
   }
 })
+
+// Detect fetches the feed to fill the metadata; it only changes the URL when
+// discovery resolves a different one.
+const detect = useLoading(async () => {
+  const url = feedUrl.value.trim()
+  if (!url) return
+  try {
+    const d = await api.discoverFeed(url)
+    title.value = d.title
+    if (d.feed_url) feedUrl.value = d.feed_url
+    siteUrl.value = d.site_url
+    description.value = d.description
+    toast.success(`Detected feed ${d.title || d.feed_url}`)
+  } catch (e) {
+    toast.fromError(e)
+  }
+})
 </script>
 
 <template>
@@ -65,7 +83,12 @@ const save = useLoading(async () => {
       </label>
       <label class="field">
         <span class="field__label">Feed URL</span>
-        <input v-model="feedUrl" class="field__input" type="url" aria-label="Feed URL" />
+        <div class="field__row">
+          <input v-model="feedUrl" class="field__input field__input--row" type="url" aria-label="Feed URL" />
+          <Button type="button" size="sm" :loading="detect.isLoading" title="Detect feed metadata" @click="detect">
+            <span aria-hidden="true" class="i-lucide-search text-[14px]" /> Detect
+          </Button>
+        </div>
       </label>
       <label class="field">
         <span class="field__label">Site URL</span>
@@ -114,6 +137,13 @@ const save = useLoading(async () => {
   font: inherit;
   font-size: 13px;
   resize: vertical;
+}
+.field__row {
+  display: flex;
+  gap: 6px;
+}
+.field__input--row {
+  flex: 1;
 }
 .actions {
   display: flex;

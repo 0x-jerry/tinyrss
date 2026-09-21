@@ -23,6 +23,14 @@ export interface Feed {
   updated_at: string
 }
 
+// Metadata the "Detect" button returns for a feed URL.
+export interface DiscoveredFeed {
+  feed_url: string
+  title: string
+  site_url: string
+  description: string
+}
+
 // Item as returned by the list endpoint (no summary/content).
 export interface Item {
   id: number

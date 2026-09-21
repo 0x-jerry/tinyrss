@@ -16,6 +16,7 @@ import (
 func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/feeds", s.handleListFeeds)
 	mux.HandleFunc("POST /api/feeds", s.handleCreateFeed)
+	mux.HandleFunc("POST /api/feeds/discover", s.handleDiscoverFeed)
 	mux.HandleFunc("GET /api/feeds/{id}", s.handleGetFeed)
 	mux.HandleFunc("PUT /api/feeds/{id}", s.handleUpdateFeed)
 	mux.HandleFunc("DELETE /api/feeds/{id}", s.handleDeleteFeed)
@@ -61,42 +62,61 @@ func (s *Server) handleListFeeds(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		FeedURL  string `json:"feed_url"`
-		FolderID *int   `json:"folder_id"`
+		FeedURL     string `json:"feed_url"`
+		URL         string `json:"url"`
+		Title       string `json:"title"`
+		SiteURL     string `json:"site_url"`
+		Description string `json:"description"`
+		FolderID    *int   `json:"folder_id"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
 	}
-	body.FeedURL = strings.TrimSpace(body.FeedURL)
-	if body.FeedURL == "" {
+	feedURL := strings.TrimSpace(body.FeedURL)
+	if feedURL == "" {
+		feedURL = strings.TrimSpace(body.URL)
+	}
+	if feedURL == "" {
 		writeError(w, http.StatusBadRequest, "feed_url is required")
 		return
 	}
-	pf, err := s.fetcher.Probe(body.FeedURL)
-	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity,
-			"feed URL is not parseable as RSS/Atom; paste a direct feed URL: "+err.Error())
-		return
-	}
-	siteURL := ""
-	if pf.Link != "" {
-		siteURL = pf.Link
+	title := strings.TrimSpace(body.Title)
+	if title == "" {
+		title = feedURL
 	}
 	feed, err := s.repo.CreateFeed(repository.Feed{
-		Title:       pf.Title,
-		FeedURL:     body.FeedURL,
-		SiteURL:     siteURL,
-		Description: pf.Description,
+		Title:       title,
+		FeedURL:     feedURL,
+		SiteURL:     strings.TrimSpace(body.SiteURL),
+		Description: body.Description,
 		FolderID:    body.FolderID,
 	})
 	if err != nil {
 		s.repoError(w, err)
 		return
 	}
-	// First pull populates items so the new feed is immediately useful.
-	_, _ = s.fetcher.RefreshFeed(feed.ID)
-	feed, _ = s.repo.GetFeed(feed.ID)
 	writeJSON(w, http.StatusOK, feed)
+}
+
+func (s *Server) handleDiscoverFeed(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		URL string `json:"url"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		return
+	}
+	body.URL = strings.TrimSpace(body.URL)
+	if body.URL == "" {
+		writeError(w, http.StatusBadRequest, "url is required")
+		return
+	}
+	d, err := s.fetcher.Discover(body.URL)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity,
+			"feed URL is not parseable as RSS/Atom: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, d)
 }
 
 func (s *Server) handleGetFeed(w http.ResponseWriter, r *http.Request) {
@@ -133,17 +153,6 @@ func (s *Server) handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
 		if trimmed == "" {
 			writeError(w, http.StatusBadRequest, "feed_url cannot be empty")
 			return
-		}
-		if feed, err := s.repo.GetFeed(id); err != nil {
-			s.repoError(w, err)
-			return
-		} else if trimmed != feed.FeedURL {
-			// Re-validate a changed URL so we never store an unparseable feed.
-			if _, err := s.fetcher.Probe(trimmed); err != nil {
-				writeError(w, http.StatusUnprocessableEntity,
-					"feed URL is not parseable as RSS/Atom; paste a direct feed URL: "+err.Error())
-				return
-			}
 		}
 		feedURL = &trimmed
 	}

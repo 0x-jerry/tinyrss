@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { injectFeedsTree } from '../../providers/feedsTree'
 import { useApiToast } from '../../api/useApiToast'
+import { api } from '../../api/endpoints'
 import { useLoading } from '../../composables/useLoading'
 import Modal from '../shared/Modal.vue'
 import Button from '../shared/Button.vue'
@@ -11,17 +12,45 @@ const toast = useApiToast()
 
 const open = defineModel<boolean>({ default: false })
 
-const url = ref('')
+const title = ref('')
+const feedUrl = ref('')
+const siteUrl = ref('')
+const description = ref('')
 const folderId = ref<number | null>(null)
 
-const addFeed = useLoading(async () => {
-  const feedUrl = url.value.trim()
-  if (!feedUrl) return
+// Detect fetches the feed to fill the form; add/update never fetch on their own.
+const detect = useLoading(async () => {
+  const url = feedUrl.value.trim()
+  if (!url) return
   try {
-    await feeds.addFeed(feedUrl, folderId.value)
+    const d = await api.discoverFeed(url)
+    title.value = d.title
+    if (d.feed_url) feedUrl.value = d.feed_url
+    siteUrl.value = d.site_url
+    description.value = d.description
+    toast.success(`Detected feed ${d.title || d.feed_url}`)
+  } catch (e) {
+    toast.fromError(e)
+  }
+})
+
+const addFeed = useLoading(async () => {
+  const url = feedUrl.value.trim()
+  if (!url) return
+  try {
+    await feeds.addFeed({
+      feed_url: url,
+      title: title.value.trim(),
+      site_url: siteUrl.value.trim(),
+      description: description.value,
+      folder_id: folderId.value,
+    })
     toast.success('Feed added')
     open.value = false
-    url.value = ''
+    title.value = ''
+    feedUrl.value = ''
+    siteUrl.value = ''
+    description.value = ''
     folderId.value = null
   } catch (e) {
     toast.fromError(e)
@@ -33,8 +62,25 @@ const addFeed = useLoading(async () => {
   <Modal v-model="open" title="Add feed">
     <form class="add" @submit.prevent="addFeed">
       <label class="field">
-        <span class="field__label">URL</span>
-        <input v-model="url" class="field__input" type="url" placeholder="https://example.com/feed.xml" aria-label="Feed URL" />
+        <span class="field__label">Name</span>
+        <input v-model="title" class="field__input" type="text" aria-label="Feed name" />
+      </label>
+      <label class="field">
+        <span class="field__label">Feed URL</span>
+        <div class="field__row">
+          <input v-model="feedUrl" class="field__input field__input--row" type="url" placeholder="https://example.com" aria-label="Feed URL" />
+          <Button type="button" size="sm" :loading="detect.isLoading" title="Detect feed metadata" @click="detect">
+            <span aria-hidden="true" class="i-lucide-search text-[14px]" /> Detect
+          </Button>
+        </div>
+      </label>
+      <label class="field">
+        <span class="field__label">Site URL</span>
+        <input v-model="siteUrl" class="field__input" type="url" aria-label="Site URL" />
+      </label>
+      <label class="field">
+        <span class="field__label">Description</span>
+        <textarea v-model="description" class="field__input field__input--area" rows="3" aria-label="Description" />
       </label>
       <label class="field">
         <span class="field__label">Group</span>
@@ -74,6 +120,14 @@ const addFeed = useLoading(async () => {
   border-radius: 6px;
   font: inherit;
   font-size: 13px;
+  resize: vertical;
+}
+.field__row {
+  display: flex;
+  gap: 6px;
+}
+.field__input--row {
+  flex: 1;
 }
 .actions {
   display: flex;

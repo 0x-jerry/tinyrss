@@ -59,10 +59,10 @@ describe('feedsTree provider import/export', () => {
     withFeedsTree([] as Feed[])
 
     const provider = createFeedsTreeProvider()
-    const created = await provider.addFeed('https://x.example/rss', 3)
+    const created = await provider.addFeed({ feed_url: 'https://x.example/rss', folder_id: 3 })
 
     expect(created).toBe(feed)
-    expect(api.createFeed).toHaveBeenCalledWith('https://x.example/rss', 3)
+    expect(api.createFeed).toHaveBeenCalledWith({ feed_url: 'https://x.example/rss', folder_id: 3 })
     expect(api.listFeeds).toHaveBeenCalled()
   })
 

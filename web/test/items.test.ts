@@ -55,10 +55,12 @@ describe('items provider', () => {
   const selection = { feedId: null, folderId: null }
   let calls: string[]
   let onItemsChanged: ReturnType<typeof vi.fn>
+  let adjustUnread: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     calls = []
     onItemsChanged = vi.fn()
+    adjustUnread = vi.fn()
     vi.mocked(api.listItems).mockReset().mockImplementation(async (query: string) => {
       calls.push(query)
       return pageResponse(query)
@@ -69,7 +71,7 @@ describe('items provider', () => {
   })
 
   function provider() {
-    return createItemsProvider({ getSelection: () => selection, onItemsChanged })
+    return createItemsProvider({ getSelection: () => selection, onItemsChanged, adjustUnread })
   }
 
   it('loads the first page', async () => {
@@ -184,13 +186,13 @@ describe('items provider', () => {
     expect(calls[1]).toContain('search=cats')
   })
 
-  it('marks an item read optimistically and notifies', async () => {
+  it('marks an item read optimistically and decrements the feed badge', async () => {
     const p = provider()
     await p.load()
     expect(p.state.items[0].is_read).toBe(false)
     await p.markRead(p.state.items[0].id)
     expect(p.state.items[0].is_read).toBe(true)
-    expect(onItemsChanged).toHaveBeenCalled()
+    expect(adjustUnread).toHaveBeenCalledWith(1, -1)
   })
 
   it('marks all read for the current selection', async () => {
@@ -201,20 +203,30 @@ describe('items provider', () => {
     expect(p.state.items.every((i) => i.is_read)).toBe(true)
   })
 
-  it('toggleRead flips read state via the api and notifies', async () => {
+  it('toggleRead flips read state via the api and adjusts the feed badge', async () => {
     const actions: string[] = []
     vi.mocked(api.setItemState).mockImplementation(async (_id: number, action: string) => {
       actions.push(action)
     })
-    const p = createItemsProvider({ getSelection: () => selection, onItemsChanged })
+    const p = createItemsProvider({ getSelection: () => selection, onItemsChanged, adjustUnread })
     await p.load()
     await p.toggleRead(p.state.items[0].id)
     expect(p.state.items[0].is_read).toBe(true)
     expect(actions).toEqual(['read'])
-    expect(onItemsChanged).toHaveBeenCalled()
+    expect(adjustUnread).toHaveBeenLastCalledWith(1, -1)
     await p.toggleRead(p.state.items[0].id)
     expect(p.state.items[0].is_read).toBe(false)
     expect(actions).toEqual(['read', 'unread'])
+    expect(adjustUnread).toHaveBeenLastCalledWith(1, 1)
+  })
+
+  it('openItem marks read optimistically and decrements the feed badge', async () => {
+    vi.mocked(api.getItem).mockResolvedValue({ ...item(1), summary: '', content: '' })
+    const p = createItemsProvider({ getSelection: () => selection, onItemsChanged, adjustUnread })
+    await p.load()
+    await p.openItem(p.state.items[0].id)
+    expect(p.state.items[0].is_read).toBe(true)
+    expect(adjustUnread).toHaveBeenCalledWith(1, -1)
   })
 
   it('toggleStar flips star state via the api', async () => {

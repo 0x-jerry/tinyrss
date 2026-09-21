@@ -79,6 +79,8 @@ export interface FeedsTreeState {
 export interface FeedsTreeProvider {
   state: DeepReadonly<FeedsTreeState>
   reload: () => Promise<void>
+  /** Adjust a feed's unread count by delta (e.g. an item marked read/unread) and rebuild derived badges. */
+  adjustUnread: (feedId: number, delta: number) => void
   addFeed: (patch: AddFeedPatch) => Promise<Feed>
   updateFeed: (id: number, patch: UpdateFeedPatch) => Promise<void>
   deleteFeed: (id: number) => Promise<void>
@@ -151,6 +153,12 @@ export function createFeedsTreeProvider(): FeedsTreeProvider {
   return {
     state: readonly(raw),
     reload,
+    adjustUnread(feedId: number, delta: number) {
+      const feed = raw.feeds.find((f) => f.id === feedId)
+      if (!feed) return
+      feed.unread = Math.max(0, feed.unread + delta)
+      raw.tree = buildTree(raw.feeds, raw.folders)
+    },
     async addFeed(patch: AddFeedPatch) {
       const feed = await api.createFeed(patch)
       await reload()

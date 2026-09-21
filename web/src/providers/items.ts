@@ -53,6 +53,8 @@ export interface ItemsDeps {
   getSelection: () => { feedId: number | null; folderId: number | null }
   selectItem?: (id: number) => void
   onItemsChanged?: () => void
+  /** Apply a ±1 unread-count change to the tree badge for the item's feed. */
+  adjustUnread?: (feedId: number, delta: number) => void
 }
 
 export interface ItemsProvider {
@@ -147,12 +149,13 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
     if (raw.selectedItem?.id === id) Object.assign(raw.selectedItem, patch)
   }
 
-  // Every read/star mutation goes through these two: optimistic patch + notify
-  // for reads, then the API call. Toggles reuse them to avoid re-duplicating
-  // the read/unread/star/unstar switching in every component.
+  // Every read/star mutation goes through these two: optimistic patch (plus a
+  // tree-badge unread adjust for reads), then the API call. Toggles reuse them
+  // to avoid re-duplicating the read/unread/star/unstar switching in every component.
   async function setItemRead(id: number, read: boolean) {
+    const item = findItem(id)
     patch(id, { is_read: read })
-    notify()
+    if (item) deps.adjustUnread?.(item.feed_id, read ? -1 : 1)
     await api.setItemState(id, read ? 'read' : 'unread')
   }
   async function setItemStarred(id: number, starred: boolean) {
@@ -188,7 +191,7 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
       const detail = await api.getItem(id)
       raw.selectedItem = detail
       patch(id, { is_read: true })
-      notify()
+      deps.adjustUnread?.(detail.feed_id, -1)
       await api.setItemState(id, 'read')
     },
     toggleRead: async (id) => {
@@ -224,6 +227,7 @@ export function provideItems(deps: {
     }),
     selectItem: deps.selection.selectItem,
     onItemsChanged: () => deps.feedsTree.reload(),
+    adjustUnread: (feedId, delta) => deps.feedsTree.adjustUnread(feedId, delta),
   })
   // Reload the list whenever the feed/folder scope changes. No observer: the
   // selection provider invokes this from its scope-changing mutators.

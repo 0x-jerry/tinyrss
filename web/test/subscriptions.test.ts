@@ -196,3 +196,42 @@ describe('feedsTree provider import/export', () => {
     expect(provider.state.refresh).toMatchObject({ running: false, total: 3, done: 3 })
   })
 })
+
+describe('feedsTree adjustUnread', () => {
+  it('adjusts feed, folder, and total unread badges and clamps at zero', async () => {
+    const feeds = [
+      { id: 1, title: 'A', folder_id: 10, unread: 5 },
+      { id: 2, title: 'B', folder_id: 10, unread: 2 },
+      { id: 3, title: 'C', folder_id: null, unread: 4 },
+    ] as Feed[]
+    const folders = [{ id: 10, name: 'F', sort_order: 0 }] as Folder[]
+    const provider = withFeedsTree(feeds, folders)
+    await provider.reload()
+
+    // Marking an item read on feed 1: its row, folder, and grand total all drop by 1.
+    provider.adjustUnread(1, -1)
+    expect(provider.state.feeds.find((f) => f.id === 1)?.unread).toBe(4)
+    expect(provider.state.tree.folderNodes.find((n) => n.id === 10)?.unread).toBe(6)
+    expect(provider.state.tree.uncategorizedUnread).toBe(4)
+    expect(provider.state.tree.totalUnread).toBe(10)
+
+    // Marking an uncategorized item unread bumps only that bucket and the total.
+    provider.adjustUnread(3, 1)
+    expect(provider.state.tree.uncategorizedUnread).toBe(5)
+    expect(provider.state.tree.totalUnread).toBe(11)
+
+    // Counts never go negative even if local state lags the server.
+    provider.adjustUnread(2, -10)
+    expect(provider.state.feeds.find((f) => f.id === 2)?.unread).toBe(0)
+    expect(provider.state.tree.totalUnread).toBe(9)
+  })
+
+  it('ignores unknown feed ids', async () => {
+    const provider = withFeedsTree([{ id: 1, title: 'A', unread: 2 }] as Feed[])
+    await provider.reload()
+
+    provider.adjustUnread(999, -1)
+    expect(provider.state.feeds[0].unread).toBe(2)
+    expect(provider.state.tree.totalUnread).toBe(2)
+  })
+})

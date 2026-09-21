@@ -99,15 +99,25 @@ async function doDelete() {
   const target = pendingDelete.value
   if (!target) return
   try {
+    let cleared = false
     if (target.kind === 'feed') {
-      if (selection.state.feedId === target.id) selection.selectFeed(null)
+      if (selection.state.feedId === target.id) {
+        selection.selectFeed(null)
+        cleared = true
+      }
       await feeds.deleteFeed(target.id)
     } else {
-      if (selection.state.folderId === target.id) selection.selectFolder(null)
+      if (selection.state.folderId === target.id) {
+        selection.selectFolder(null)
+        cleared = true
+      }
       await feeds.deleteFolder(target.id)
     }
     toast.success(target.kind === 'feed' ? 'Feed deleted' : 'Folder deleted')
     pendingDelete.value = null
+    // The selected feed/folder no longer exists: point the URL back at the
+    // All-articles scope instead of a now-invalid id.
+    if (cleared) emit('openList')
   } catch (e) {
     toast.fromError(e)
     throw e

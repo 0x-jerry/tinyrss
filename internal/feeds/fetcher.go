@@ -68,7 +68,7 @@ type Fetcher struct {
 
 func NewFetcher(repo *repository.Repo) *Fetcher {
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: 20 * time.Second,
 		Transport: &http.Transport{
 			MaxIdleConns:        workerCount * 2,
 			MaxIdleConnsPerHost: workerCount,

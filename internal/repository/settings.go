@@ -27,8 +27,8 @@ func (r *Repo) setSetting(key string, days int) error {
 	return err
 }
 
-// GetSettings returns the auto-clean retentions, defaulting on (30 days) only
-// when no value has ever been stored for a key.
+// GetSettings returns the user-adjustable settings, defaulting only when no
+// value has ever been stored for a key.
 func (r *Repo) GetSettings() (Settings, error) {
 	fl, err := r.settingValue("fetch_log_cleanup_days", defaultFetchLogCleanupDays)
 	if err != nil {
@@ -38,7 +38,15 @@ func (r *Repo) GetSettings() (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	return Settings{FetchLogCleanupDays: fl, RenderCacheCleanupDays: rc}, nil
+	ri, err := r.settingValue("refresh_interval_minutes", defaultRefreshIntervalMinutes)
+	if err != nil {
+		return Settings{}, err
+	}
+	return Settings{
+		FetchLogCleanupDays:    fl,
+		RenderCacheCleanupDays: rc,
+		RefreshIntervalMinutes: ri,
+	}, nil
 }
 
 // SetFetchLogCleanupDays stores the fetch-log auto-clean retention; 0 disables.
@@ -49,4 +57,9 @@ func (r *Repo) SetFetchLogCleanupDays(days int) error {
 // SetRenderCacheCleanupDays stores the render-cache auto-clean retention; 0 disables.
 func (r *Repo) SetRenderCacheCleanupDays(days int) error {
 	return r.setSetting("render_cache_cleanup_days", days)
+}
+
+// SetRefreshIntervalMinutes stores the auto-refresh poll interval in minutes.
+func (r *Repo) SetRefreshIntervalMinutes(minutes int) error {
+	return r.setSetting("refresh_interval_minutes", minutes)
 }

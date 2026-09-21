@@ -94,19 +94,23 @@ func NewFetcher(repo *repository.Repo) *Fetcher {
 }
 
 // Start launches the periodic refresh loop; Stop shuts it down gracefully.
+// The poll interval is re-read from the settings table each cycle (falling
+// back to the Start arg), so a Settings change takes effect on the next tick.
 // RefreshFeed and RefreshAll remain callable without ever calling Start.
 func (f *Fetcher) Start(interval time.Duration) {
 	f.startOnce.Do(func() {
 		f.stopCh = make(chan struct{})
 		f.stopWg.Go(func() {
-			t := time.NewTicker(interval)
-			defer t.Stop()
+			current := interval
 			for {
+				if s, err := f.repo.GetSettings(); err == nil && s.RefreshIntervalMinutes >= 1 {
+					current = time.Duration(s.RefreshIntervalMinutes) * time.Minute
+				}
 				select {
-				case <-t.C:
+				case <-time.After(current):
 					f.maybePruneFetchLogs()
 					f.maybePruneRenderCache()
-					f.refreshDue(interval)
+					f.refreshDue(current)
 				case <-f.stopCh:
 					return
 				}

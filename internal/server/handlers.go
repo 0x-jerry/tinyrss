@@ -472,6 +472,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		FetchLogCleanupDays    *int `json:"fetch_log_cleanup_days"`
 		RenderCacheCleanupDays *int `json:"render_cache_cleanup_days"`
+		RefreshIntervalMinutes *int `json:"refresh_interval_minutes"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
@@ -492,6 +493,16 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.repo.SetRenderCacheCleanupDays(*body.RenderCacheCleanupDays); err != nil {
+			s.serverError(w, err)
+			return
+		}
+	}
+	if body.RefreshIntervalMinutes != nil {
+		if *body.RefreshIntervalMinutes < 1 {
+			writeError(w, http.StatusBadRequest, "refresh_interval_minutes must be a positive integer")
+			return
+		}
+		if err := s.repo.SetRefreshIntervalMinutes(*body.RefreshIntervalMinutes); err != nil {
 			s.serverError(w, err)
 			return
 		}

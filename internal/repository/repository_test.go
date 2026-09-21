@@ -29,8 +29,8 @@ func TestStoreMigrationsApplied(t *testing.T) {
 	if err := st.DB.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
-	if n != 6 {
-		t.Fatalf("want 6 applied migrations, got %d", n)
+	if n != 7 {
+		t.Fatalf("want 7 applied migrations, got %d", n)
 	}
 }
 
@@ -426,5 +426,31 @@ func TestRenderCache(t *testing.T) {
 	}
 	if _, ok, _ := repo.GetRenderCache("https://example.com/a"); ok {
 		t.Fatal("rendered article still cached after prune")
+	}
+}
+
+// TestRefreshIntervalSetting pins the refresh_interval_minutes setting
+// round-trip (default from migration, then persisted and re-read).
+func TestRefreshIntervalSetting(t *testing.T) {
+	repo := newTestRepo(t)
+
+	s, err := repo.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.RefreshIntervalMinutes != defaultRefreshIntervalMinutes {
+		t.Fatalf("default refresh interval = %d, want %d",
+			s.RefreshIntervalMinutes, defaultRefreshIntervalMinutes)
+	}
+
+	if err := repo.SetRefreshIntervalMinutes(30); err != nil {
+		t.Fatal(err)
+	}
+	s, err = repo.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.RefreshIntervalMinutes != 30 {
+		t.Fatalf("refresh interval after set = %d, want 30", s.RefreshIntervalMinutes)
 	}
 }

@@ -73,6 +73,9 @@ export const api = {
   // Settings & fetch logs
   fetchLogs: (limit?: number) => request<FetchLog[]>('GET', `/api/fetch-logs${limit ? `?limit=${limit}` : ''}`),
   getSettings: () => request<Settings>('GET', '/api/settings'),
-  updateSettings: (patch: { fetch_log_cleanup_days?: number; render_cache_cleanup_days?: number }) =>
-    request<Settings>('PUT', '/api/settings', patch),
+  updateSettings: (patch: {
+    fetch_log_cleanup_days?: number
+    render_cache_cleanup_days?: number
+    refresh_interval_minutes?: number
+  }) => request<Settings>('PUT', '/api/settings', patch),
 }

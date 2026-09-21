@@ -35,6 +35,7 @@ const filteredLogs = computed(() =>
 
 const cleanupDays = ref(30)
 const renderCleanupDays = ref(30)
+const refreshInterval = ref(15)
 const settingsLoading = ref(false)
 
 watch(open, (isOpen) => {
@@ -49,6 +50,7 @@ async function loadSettings() {
     const s = await api.getSettings()
     cleanupDays.value = s.fetch_log_cleanup_days
     renderCleanupDays.value = s.render_cache_cleanup_days
+    refreshInterval.value = s.refresh_interval_minutes
   } catch (e) {
     toast.fromError(e)
   } finally {
@@ -75,6 +77,17 @@ async function saveRenderCleanupDays() {
     toast.success(
       days > 0 ? `Render cache retention set to ${days} day${days === 1 ? '' : 's'}` : 'Render cache never cleaned',
     )
+  } catch (e) {
+    toast.fromError(e)
+  }
+}
+
+async function saveRefreshInterval() {
+  const minutes = Math.max(1, Math.floor(Number(refreshInterval.value) || 0))
+  refreshInterval.value = minutes
+  try {
+    await api.updateSettings({ refresh_interval_minutes: minutes })
+    toast.success(`Feeds auto-refresh every ${minutes} minute${minutes === 1 ? '' : 's'}`)
   } catch (e) {
     toast.fromError(e)
   }
@@ -249,6 +262,35 @@ function downloadText(filename: string, text: string, mime: string) {
               <span class="retention__unit">days</span>
             </span>
             <span class="retention__hint">Set to 0 to never clean cached articles.</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="refresh-title">
+        <div class="section__heading">
+          <div>
+            <h4 id="refresh-title" class="section__title">Auto-refresh</h4>
+            <p class="section__description">How often background polling checks your feeds.</p>
+          </div>
+          <span aria-hidden="true" class="section__icon i-lucide-refresh-cw" />
+        </div>
+        <div class="retention-list">
+          <label class="retention">
+            <span class="retention__label">Refresh feeds every</span>
+            <span class="retention__control">
+              <input
+                v-model.number="refreshInterval"
+                class="retention__input"
+                type="number"
+                min="1"
+                step="1"
+                :disabled="settingsLoading"
+                aria-label="Auto-refresh interval (minutes)"
+                @change="saveRefreshInterval"
+              />
+              <span class="retention__unit">minutes</span>
+            </span>
+            <span class="retention__hint">Changes take effect on the next cycle.</span>
           </label>
         </div>
       </section>

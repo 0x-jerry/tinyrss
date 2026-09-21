@@ -103,4 +103,5 @@ export interface FetchLog {
 export interface Settings {
   fetch_log_cleanup_days: number
   render_cache_cleanup_days: number
+  refresh_interval_minutes: number
 }

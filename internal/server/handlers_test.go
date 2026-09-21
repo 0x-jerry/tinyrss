@@ -526,6 +526,25 @@ func TestSettingsAndFetchLogsEndpoints(t *testing.T) {
 		t.Fatalf("negative render days status = %d, want 400", resp.StatusCode)
 	}
 
+	// Refresh interval: default, persist a valid value, reject invalid ones.
+	resp, body = do(t, ts, "GET", "/api/settings", token, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("get settings: %d %s", resp.StatusCode, body)
+	}
+	if s := decode[repository.Settings](t, body); s.RefreshIntervalMinutes != 15 {
+		t.Fatalf("default refresh interval = %d, want 15", s.RefreshIntervalMinutes)
+	}
+	resp, body = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"refresh_interval_minutes":30}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("put refresh interval: %d %s", resp.StatusCode, body)
+	}
+	if s := decode[repository.Settings](t, body); s.RefreshIntervalMinutes != 30 {
+		t.Fatalf("refresh interval after update = %d, want 30", s.RefreshIntervalMinutes)
+	}
+	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"refresh_interval_minutes":0}`)); resp.StatusCode != 400 {
+		t.Fatalf("zero refresh interval status = %d, want 400", resp.StatusCode)
+	}
+
 	resp, body = do(t, ts, "GET", "/api/fetch-logs", token, nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("fetch-logs: %d %s", resp.StatusCode, body)

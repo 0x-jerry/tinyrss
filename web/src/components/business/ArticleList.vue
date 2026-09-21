@@ -113,6 +113,15 @@ const refresh = useLoading(async () => {
 const refreshBusy = computed(() => refresh.isLoading || (selection.state.feedId == null && feeds.state.refresh.running))
 
 const hasMore = computed(() => items.state.page * items.state.limit < items.state.total)
+
+// Compact publish date: "Sep 21" for the current year, "Dec 3, 2024" otherwise.
+function dateLabel(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  return d.toLocaleDateString(undefined, sameYear ? { month: 'short', day: 'numeric' } : { year: 'numeric', month: 'short', day: 'numeric' })
+}
 </script>
 
 <template>
@@ -183,8 +192,10 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
           <div class="row__body">
             <div class="row__title">{{ data.is_read ? '' : '● ' }}{{ data.title }}</div>
             <div class="row__meta">
-              <span>{{ data.feed_title }}</span>
-              <span v-if="data.author"> · {{ data.author }}</span>
+              <span class="row__meta-text">
+                {{ data.feed_title }}<template v-if="data.author"> · {{ data.author }}</template>
+              </span>
+              <span class="row__date"><time :datetime="data.published_at">{{ dateLabel(data.published_at) }}</time></span>
             </div>
           </div>
         </div>
@@ -324,10 +335,21 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
 }
 .row__meta {
   margin-top: 2px;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
   font-size: 11.5px;
   color: var(--text-faint);
+}
+.row__meta-text {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row__date {
+  flex: none;
   white-space: nowrap;
 }
 .artlist__empty {

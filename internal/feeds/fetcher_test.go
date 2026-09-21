@@ -261,7 +261,7 @@ func TestRefreshAllGapSkipsRecentFeeds(t *testing.T) {
 
 	// Backdating last_fetched_at beyond the gap lets the next run fetch again.
 	if _, err := repo.DB.Exec(`UPDATE feeds SET last_fetched_at = ? WHERE id = ?`,
-		time.Now().Add(-2*minRefreshGap).Format(time.RFC3339), feed.ID); err != nil {
+		time.Now().Add(-2*fetcher.minRefreshGap()).Format(time.RFC3339), feed.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := fetcher.RefreshAllAsync(); err != nil {

@@ -29,8 +29,8 @@ func TestStoreMigrationsApplied(t *testing.T) {
 	if err := st.DB.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
-	if n != 7 {
-		t.Fatalf("want 7 applied migrations, got %d", n)
+	if n != 8 {
+		t.Fatalf("want 8 applied migrations, got %d", n)
 	}
 }
 
@@ -327,34 +327,34 @@ func TestFetchLogsAndCleanupSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.FetchLogCleanupDays != 30 {
-		t.Fatalf("default cleanup days = %d, want 30", s.FetchLogCleanupDays)
+	if s.FetchLogCleanupSeconds != 30*86400 {
+		t.Fatalf("default cleanup seconds = %d, want %d", s.FetchLogCleanupSeconds, 30*86400)
 	}
-	if err := repo.SetFetchLogCleanupDays(7); err != nil {
+	if err := repo.SetFetchLogCleanupSeconds(7 * 86400); err != nil {
 		t.Fatal(err)
 	}
 	s, err = repo.GetSettings()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.FetchLogCleanupDays != 7 {
-		t.Fatalf("cleanup days after set = %d, want 7", s.FetchLogCleanupDays)
+	if s.FetchLogCleanupSeconds != 7*86400 {
+		t.Fatalf("cleanup seconds after set = %d, want %d", s.FetchLogCleanupSeconds, 7*86400)
 	}
-	if s.RenderCacheCleanupDays != 30 {
-		t.Fatalf("default render cache cleanup days = %d, want 30", s.RenderCacheCleanupDays)
+	if s.RenderCacheCleanupSeconds != 30*86400 {
+		t.Fatalf("default render cache cleanup seconds = %d, want %d", s.RenderCacheCleanupSeconds, 30*86400)
 	}
-	if err := repo.SetRenderCacheCleanupDays(14); err != nil {
+	if err := repo.SetRenderCacheCleanupSeconds(14 * 86400); err != nil {
 		t.Fatal(err)
 	}
 	s, err = repo.GetSettings()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.RenderCacheCleanupDays != 14 {
-		t.Fatalf("render cache cleanup days after set = %d, want 14", s.RenderCacheCleanupDays)
+	if s.RenderCacheCleanupSeconds != 14*86400 {
+		t.Fatalf("render cache cleanup seconds after set = %d, want %d", s.RenderCacheCleanupSeconds, 14*86400)
 	}
-	if s.FetchLogCleanupDays != 7 {
-		t.Fatalf("fetch log cleanup days regressed to %d after render set", s.FetchLogCleanupDays)
+	if s.FetchLogCleanupSeconds != 7*86400 {
+		t.Fatalf("fetch log cleanup seconds regressed to %d after render set", s.FetchLogCleanupSeconds)
 	}
 }
 
@@ -429,8 +429,9 @@ func TestRenderCache(t *testing.T) {
 	}
 }
 
-// TestRefreshIntervalSetting pins the refresh_interval_minutes setting
-// round-trip (default from migration, then persisted and re-read).
+// TestRefreshIntervalSetting pins the refresh_interval_seconds and
+// min_refresh_gap_seconds settings round-trip (default from migration, then
+// persisted and re-read).
 func TestRefreshIntervalSetting(t *testing.T) {
 	repo := newTestRepo(t)
 
@@ -438,19 +439,29 @@ func TestRefreshIntervalSetting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.RefreshIntervalMinutes != DefaultRefreshIntervalMinutes {
+	if s.RefreshIntervalSeconds != DefaultRefreshIntervalSeconds {
 		t.Fatalf("default refresh interval = %d, want %d",
-			s.RefreshIntervalMinutes, DefaultRefreshIntervalMinutes)
+			s.RefreshIntervalSeconds, DefaultRefreshIntervalSeconds)
+	}
+	if s.MinRefreshGapSeconds != DefaultMinRefreshGapSeconds {
+		t.Fatalf("default min refresh gap = %d, want %d",
+			s.MinRefreshGapSeconds, DefaultMinRefreshGapSeconds)
 	}
 
-	if err := repo.SetRefreshIntervalMinutes(30); err != nil {
+	if err := repo.SetRefreshIntervalSeconds(1800); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetMinRefreshGapSeconds(300); err != nil {
 		t.Fatal(err)
 	}
 	s, err = repo.GetSettings()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.RefreshIntervalMinutes != 30 {
-		t.Fatalf("refresh interval after set = %d, want 30", s.RefreshIntervalMinutes)
+	if s.RefreshIntervalSeconds != 1800 {
+		t.Fatalf("refresh interval after set = %d, want 1800", s.RefreshIntervalSeconds)
+	}
+	if s.MinRefreshGapSeconds != 300 {
+		t.Fatalf("min refresh gap after set = %d, want 300", s.MinRefreshGapSeconds)
 	}
 }

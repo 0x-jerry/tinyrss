@@ -501,48 +501,61 @@ func TestSettingsAndFetchLogsEndpoints(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("get settings: %d %s", resp.StatusCode, body)
 	}
-	if s := decode[repository.Settings](t, body); s.FetchLogCleanupDays != 30 || s.RenderCacheCleanupDays != 30 {
-		t.Fatalf("default settings = %+v, want both 30", s)
+	if s := decode[repository.Settings](t, body); s.FetchLogCleanupSeconds != 30*86400 || s.RenderCacheCleanupSeconds != 30*86400 {
+		t.Fatalf("default settings = %+v, want both 30*86400", s)
 	}
 	// Partial updates apply only the present field and keep the other.
-	resp, body = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"fetch_log_cleanup_days":7}`))
+	resp, body = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"fetch_log_cleanup_seconds":604800}`))
 	if resp.StatusCode != 200 {
 		t.Fatalf("put settings: %d", resp.StatusCode)
 	}
-	if s := decode[repository.Settings](t, body); s.FetchLogCleanupDays != 7 || s.RenderCacheCleanupDays != 30 {
+	if s := decode[repository.Settings](t, body); s.FetchLogCleanupSeconds != 604800 || s.RenderCacheCleanupSeconds != 30*86400 {
 		t.Fatalf("settings after fetch update = %+v", s)
 	}
-	resp, body = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"render_cache_cleanup_days":14}`))
+	resp, body = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"render_cache_cleanup_seconds":1209600}`))
 	if resp.StatusCode != 200 {
 		t.Fatalf("put render settings: %d", resp.StatusCode)
 	}
-	if s := decode[repository.Settings](t, body); s.FetchLogCleanupDays != 7 || s.RenderCacheCleanupDays != 14 {
+	if s := decode[repository.Settings](t, body); s.FetchLogCleanupSeconds != 604800 || s.RenderCacheCleanupSeconds != 1209600 {
 		t.Fatalf("settings after render update = %+v", s)
 	}
-	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"fetch_log_cleanup_days":-1}`)); resp.StatusCode != 400 {
-		t.Fatalf("negative fetch days status = %d, want 400", resp.StatusCode)
+	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"fetch_log_cleanup_seconds":-1}`)); resp.StatusCode != 400 {
+		t.Fatalf("negative fetch seconds status = %d, want 400", resp.StatusCode)
 	}
-	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"render_cache_cleanup_days":-1}`)); resp.StatusCode != 400 {
-		t.Fatalf("negative render days status = %d, want 400", resp.StatusCode)
+	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"render_cache_cleanup_seconds":-1}`)); resp.StatusCode != 400 {
+		t.Fatalf("negative render seconds status = %d, want 400", resp.StatusCode)
 	}
 
-	// Refresh interval: default, persist a valid value, reject invalid ones.
+	// Refresh interval & gap: default, persist valid values, reject invalid ones.
 	resp, body = do(t, ts, "GET", "/api/settings", token, nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("get settings: %d %s", resp.StatusCode, body)
 	}
-	if s := decode[repository.Settings](t, body); s.RefreshIntervalMinutes != 15 {
-		t.Fatalf("default refresh interval = %d, want 15", s.RefreshIntervalMinutes)
+	if s := decode[repository.Settings](t, body); s.RefreshIntervalSeconds != 900 {
+		t.Fatalf("default refresh interval = %d, want 900", s.RefreshIntervalSeconds)
 	}
-	resp, body = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"refresh_interval_minutes":30}`))
+	if s := decode[repository.Settings](t, body); s.MinRefreshGapSeconds != 600 {
+		t.Fatalf("default min refresh gap = %d, want 600", s.MinRefreshGapSeconds)
+	}
+	resp, body = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"refresh_interval_seconds":30}`))
 	if resp.StatusCode != 200 {
 		t.Fatalf("put refresh interval: %d %s", resp.StatusCode, body)
 	}
-	if s := decode[repository.Settings](t, body); s.RefreshIntervalMinutes != 30 {
-		t.Fatalf("refresh interval after update = %d, want 30", s.RefreshIntervalMinutes)
+	if s := decode[repository.Settings](t, body); s.RefreshIntervalSeconds != 30 {
+		t.Fatalf("refresh interval after update = %d, want 30", s.RefreshIntervalSeconds)
 	}
-	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"refresh_interval_minutes":0}`)); resp.StatusCode != 400 {
+	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"refresh_interval_seconds":0}`)); resp.StatusCode != 400 {
 		t.Fatalf("zero refresh interval status = %d, want 400", resp.StatusCode)
+	}
+	resp, body = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"min_refresh_gap_seconds":60}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("put min refresh gap: %d %s", resp.StatusCode, body)
+	}
+	if s := decode[repository.Settings](t, body); s.MinRefreshGapSeconds != 60 {
+		t.Fatalf("min refresh gap after update = %d, want 60", s.MinRefreshGapSeconds)
+	}
+	if resp, _ = do(t, ts, "PUT", "/api/settings", token, strings.NewReader(`{"min_refresh_gap_seconds":0}`)); resp.StatusCode != 400 {
+		t.Fatalf("zero min refresh gap status = %d, want 400", resp.StatusCode)
 	}
 
 	resp, body = do(t, ts, "GET", "/api/fetch-logs", token, nil)

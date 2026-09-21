@@ -487,39 +487,50 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		FetchLogCleanupDays    *int `json:"fetch_log_cleanup_days"`
-		RenderCacheCleanupDays *int `json:"render_cache_cleanup_days"`
-		RefreshIntervalMinutes *int `json:"refresh_interval_minutes"`
+		FetchLogCleanupSeconds    *int `json:"fetch_log_cleanup_seconds"`
+		RenderCacheCleanupSeconds *int `json:"render_cache_cleanup_seconds"`
+		RefreshIntervalSeconds    *int `json:"refresh_interval_seconds"`
+		MinRefreshGapSeconds      *int `json:"min_refresh_gap_seconds"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
 	}
-	if body.FetchLogCleanupDays != nil {
-		if *body.FetchLogCleanupDays < 0 {
-			writeError(w, http.StatusBadRequest, "fetch_log_cleanup_days must be a non-negative integer")
+	if body.FetchLogCleanupSeconds != nil {
+		if *body.FetchLogCleanupSeconds < 0 {
+			writeError(w, http.StatusBadRequest, "fetch_log_cleanup_seconds must be a non-negative integer")
 			return
 		}
-		if err := s.repo.SetFetchLogCleanupDays(*body.FetchLogCleanupDays); err != nil {
+		if err := s.repo.SetFetchLogCleanupSeconds(*body.FetchLogCleanupSeconds); err != nil {
 			s.serverError(w, err)
 			return
 		}
 	}
-	if body.RenderCacheCleanupDays != nil {
-		if *body.RenderCacheCleanupDays < 0 {
-			writeError(w, http.StatusBadRequest, "render_cache_cleanup_days must be a non-negative integer")
+	if body.RenderCacheCleanupSeconds != nil {
+		if *body.RenderCacheCleanupSeconds < 0 {
+			writeError(w, http.StatusBadRequest, "render_cache_cleanup_seconds must be a non-negative integer")
 			return
 		}
-		if err := s.repo.SetRenderCacheCleanupDays(*body.RenderCacheCleanupDays); err != nil {
+		if err := s.repo.SetRenderCacheCleanupSeconds(*body.RenderCacheCleanupSeconds); err != nil {
 			s.serverError(w, err)
 			return
 		}
 	}
-	if body.RefreshIntervalMinutes != nil {
-		if *body.RefreshIntervalMinutes < 1 {
-			writeError(w, http.StatusBadRequest, "refresh_interval_minutes must be a positive integer")
+	if body.RefreshIntervalSeconds != nil {
+		if *body.RefreshIntervalSeconds < 1 {
+			writeError(w, http.StatusBadRequest, "refresh_interval_seconds must be a positive integer")
 			return
 		}
-		if err := s.repo.SetRefreshIntervalMinutes(*body.RefreshIntervalMinutes); err != nil {
+		if err := s.repo.SetRefreshIntervalSeconds(*body.RefreshIntervalSeconds); err != nil {
+			s.serverError(w, err)
+			return
+		}
+	}
+	if body.MinRefreshGapSeconds != nil {
+		if *body.MinRefreshGapSeconds < 1 {
+			writeError(w, http.StatusBadRequest, "min_refresh_gap_seconds must be a positive integer")
+			return
+		}
+		if err := s.repo.SetMinRefreshGapSeconds(*body.MinRefreshGapSeconds); err != nil {
 			s.serverError(w, err)
 			return
 		}

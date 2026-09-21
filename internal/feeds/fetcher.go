@@ -25,11 +25,7 @@ const (
 	maxBodySize   = 32 << 20 // cap fetched body: a runaway feed can't OOM us
 	workerCount   = 4
 	renderWorkers = 2
-	userAgent     = "tinyrss/1.0"
-
-	// minRefreshGap throttles a manual refresh-all so feeds fetched within this
-	// window are skipped, keeping a mashed refresh button from re-hitting them.
-	minRefreshGap = 10 * time.Minute
+	userAgent   = "tinyrss/1.0"
 )
 
 // RefreshJob is a point-in-time snapshot of the background refresh-all job.
@@ -121,20 +117,30 @@ func (f *Fetcher) Start() {
 // refreshInterval returns the configured auto-refresh poll interval, falling
 // back to the repository default when unset or unreadable.
 func (f *Fetcher) refreshInterval() time.Duration {
-	if s, err := f.repo.GetSettings(); err == nil && s.RefreshIntervalMinutes >= 1 {
-		return time.Duration(s.RefreshIntervalMinutes) * time.Minute
+	if s, err := f.repo.GetSettings(); err == nil && s.RefreshIntervalSeconds >= 1 {
+		return time.Duration(s.RefreshIntervalSeconds) * time.Second
 	}
-	return repository.DefaultRefreshIntervalMinutes * time.Minute
+	return repository.DefaultRefreshIntervalSeconds * time.Second
+}
+
+// minRefreshGap returns the configured throttle for a manual refresh-all:
+// feeds fetched within this window are skipped, keeping a mashed refresh
+// button from re-hitting them. Falls back to the repository default.
+func (f *Fetcher) minRefreshGap() time.Duration {
+	if s, err := f.repo.GetSettings(); err == nil && s.MinRefreshGapSeconds >= 1 {
+		return time.Duration(s.MinRefreshGapSeconds) * time.Second
+	}
+	return repository.DefaultMinRefreshGapSeconds * time.Second
 }
 
 // maybePruneFetchLogs deletes logs older than the configured retention; a
 // retention of 0 (disabled) or a settings read error skips cleanup.
 func (f *Fetcher) maybePruneFetchLogs() {
 	s, err := f.repo.GetSettings()
-	if err != nil || s.FetchLogCleanupDays <= 0 {
+	if err != nil || s.FetchLogCleanupSeconds <= 0 {
 		return
 	}
-	_, _ = f.repo.PruneFetchLogs(time.Now().AddDate(0, 0, -s.FetchLogCleanupDays))
+	_, _ = f.repo.PruneFetchLogs(time.Now().Add(-time.Duration(s.FetchLogCleanupSeconds) * time.Second))
 }
 
 // maybePruneRenderCache expires cached server-rendered articles older than the
@@ -142,10 +148,10 @@ func (f *Fetcher) maybePruneFetchLogs() {
 // skips cleanup.
 func (f *Fetcher) maybePruneRenderCache() {
 	s, err := f.repo.GetSettings()
-	if err != nil || s.RenderCacheCleanupDays <= 0 {
+	if err != nil || s.RenderCacheCleanupSeconds <= 0 {
 		return
 	}
-	_, _ = f.repo.PruneRenderCache(time.Now().AddDate(0, 0, -s.RenderCacheCleanupDays))
+	_, _ = f.repo.PruneRenderCache(time.Now().Add(-time.Duration(s.RenderCacheCleanupSeconds) * time.Second))
 }
 
 func (f *Fetcher) Stop() {
@@ -277,7 +283,7 @@ func (f *Fetcher) runRefreshAll(refs []repository.FeedRef) {
 		f.jobMu.Unlock()
 	}()
 
-	cutoff := time.Now().Add(-minRefreshGap)
+	cutoff := time.Now().Add(-f.minRefreshGap())
 	due := make([]repository.FeedRef, 0, len(refs))
 	for _, ref := range refs {
 		if last := lastFetchedAt(ref.LastFetchedAt); !last.IsZero() && !last.Before(cutoff) {

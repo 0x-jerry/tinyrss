@@ -6,12 +6,15 @@ package repository
 
 const TimeLayout = "2006-01-02 15:04:05"
 
-// defaultFetchLogCleanupDays is the initial auto-clean retention; 0 disables
-// cleanup. The value is user-adjustable via the settings API.
+// The default settings, expressed in seconds. The auto-clean retentions (0
+// disables cleanup) and the refresh interval/gap are all user-adjustable via
+// the settings API. Gap/interval defaults are exported for the fetcher's
+// fallback when the settings row is absent or unreadable.
 const (
-	defaultFetchLogCleanupDays    = 30
-	defaultRenderCacheCleanupDays = 30
-	DefaultRefreshIntervalMinutes = 15
+	defaultFetchLogCleanupSeconds    = 30 * 86400
+	defaultRenderCacheCleanupSeconds = 30 * 86400
+	DefaultRefreshIntervalSeconds    = 15 * 60
+	DefaultMinRefreshGapSeconds      = 10 * 60
 )
 
 type Folder struct {
@@ -48,14 +51,16 @@ type FetchLog struct {
 	FetchedAt string `json:"fetched_at"`
 }
 
-// Settings holds the user-adjustable app settings. FetchLogCleanupDays is the
-// auto-clean retention for fetch logs and RenderCacheCleanupDays the retention
-// for the server-render cache, both in days; 0 disables cleanup.
-// RefreshIntervalMinutes is the auto-refresh poll interval; 0 means unset.
+// Settings holds the user-adjustable app settings. FetchLogCleanupSeconds is
+// the auto-clean retention for fetch logs and RenderCacheCleanupSeconds the
+// retention for the server-render cache, both in seconds; 0 disables cleanup.
+// RefreshIntervalSeconds is the auto-refresh poll interval and
+// MinRefreshGapSeconds the minimum gap between manual refresh-alls.
 type Settings struct {
-	FetchLogCleanupDays    int `json:"fetch_log_cleanup_days"`
-	RenderCacheCleanupDays int `json:"render_cache_cleanup_days"`
-	RefreshIntervalMinutes int `json:"refresh_interval_minutes"`
+	FetchLogCleanupSeconds    int `json:"fetch_log_cleanup_seconds"`
+	RenderCacheCleanupSeconds int `json:"render_cache_cleanup_seconds"`
+	RefreshIntervalSeconds    int `json:"refresh_interval_seconds"`
+	MinRefreshGapSeconds      int `json:"min_refresh_gap_seconds"`
 }
 
 // Item is both the list and detail representation. Summary/Content are only

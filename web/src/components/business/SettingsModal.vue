@@ -6,9 +6,11 @@ import { useApiToast } from '../../api/useApiToast'
 import { useLoading } from '../../composables/useLoading'
 import { api } from '../../api/endpoints'
 import { ApiError } from '../../api/client'
+import { durationToSeconds, secondsToDuration, type DurationUnit } from '../../helpers'
 import type { FetchLog } from '../../types/models'
 import Modal from '../shared/Modal.vue'
 import Button from '../shared/Button.vue'
+import DurationInput from '../shared/DurationInput.vue'
 
 const feeds = injectFeedsTree()
 const theme = injectTheme()
@@ -33,9 +35,14 @@ const filteredLogs = computed(() =>
   showFailedOnly.value ? logs.value.filter((log) => !log.success) : logs.value,
 )
 
-const cleanupDays = ref(30)
-const renderCleanupDays = ref(30)
-const refreshInterval = ref(15)
+const cleanupValue = ref(30)
+const cleanupUnit = ref<DurationUnit>('days')
+const renderValue = ref(30)
+const renderUnit = ref<DurationUnit>('days')
+const refreshValue = ref(15)
+const refreshUnit = ref<DurationUnit>('minutes')
+const gapValue = ref(10)
+const gapUnit = ref<DurationUnit>('minutes')
 const settingsLoading = ref(false)
 
 watch(open, (isOpen) => {
@@ -48,9 +55,18 @@ async function loadSettings() {
   settingsLoading.value = true
   try {
     const s = await api.getSettings()
-    cleanupDays.value = s.fetch_log_cleanup_days
-    renderCleanupDays.value = s.render_cache_cleanup_days
-    refreshInterval.value = s.refresh_interval_minutes
+    const cleanup = secondsToDuration(s.fetch_log_cleanup_seconds)
+    cleanupValue.value = cleanup.value
+    cleanupUnit.value = cleanup.unit
+    const render = secondsToDuration(s.render_cache_cleanup_seconds)
+    renderValue.value = render.value
+    renderUnit.value = render.unit
+    const refresh = secondsToDuration(Math.max(1, s.refresh_interval_seconds))
+    refreshValue.value = refresh.value
+    refreshUnit.value = refresh.unit
+    const gap = secondsToDuration(Math.max(1, s.min_refresh_gap_seconds))
+    gapValue.value = gap.value
+    gapUnit.value = gap.unit
   } catch (e) {
     toast.fromError(e)
   } finally {
@@ -59,23 +75,31 @@ async function loadSettings() {
 }
 
 async function saveCleanupDays() {
-  const days = Math.max(0, Math.floor(Number(cleanupDays.value) || 0))
-  cleanupDays.value = days
+  const value = Math.max(0, Math.floor(Number(cleanupValue.value) || 0))
+  cleanupValue.value = value
+  const seconds = value === 0 ? 0 : durationToSeconds(value, cleanupUnit.value)
   try {
-    await api.updateSettings({ fetch_log_cleanup_days: days })
-    toast.success(days > 0 ? `Auto-clean set to ${days} day${days === 1 ? '' : 's'}` : 'Auto-clean off')
+    await api.updateSettings({ fetch_log_cleanup_seconds: seconds })
+    toast.success(
+      value > 0
+        ? `Auto-clean set to ${value} ${cleanupUnit.value}`
+        : 'Auto-clean off',
+    )
   } catch (e) {
     toast.fromError(e)
   }
 }
 
 async function saveRenderCleanupDays() {
-  const days = Math.max(0, Math.floor(Number(renderCleanupDays.value) || 0))
-  renderCleanupDays.value = days
+  const value = Math.max(0, Math.floor(Number(renderValue.value) || 0))
+  renderValue.value = value
+  const seconds = value === 0 ? 0 : durationToSeconds(value, renderUnit.value)
   try {
-    await api.updateSettings({ render_cache_cleanup_days: days })
+    await api.updateSettings({ render_cache_cleanup_seconds: seconds })
     toast.success(
-      days > 0 ? `Render cache retention set to ${days} day${days === 1 ? '' : 's'}` : 'Render cache never cleaned',
+      value > 0
+        ? `Render cache retention set to ${value} ${renderUnit.value}`
+        : 'Render cache never cleaned',
     )
   } catch (e) {
     toast.fromError(e)
@@ -83,11 +107,24 @@ async function saveRenderCleanupDays() {
 }
 
 async function saveRefreshInterval() {
-  const minutes = Math.max(1, Math.floor(Number(refreshInterval.value) || 0))
-  refreshInterval.value = minutes
+  const value = Math.max(1, Math.floor(Number(refreshValue.value) || 0))
+  refreshValue.value = value
+  const seconds = durationToSeconds(value, refreshUnit.value)
   try {
-    await api.updateSettings({ refresh_interval_minutes: minutes })
-    toast.success(`Feeds auto-refresh every ${minutes} minute${minutes === 1 ? '' : 's'}`)
+    await api.updateSettings({ refresh_interval_seconds: seconds })
+    toast.success(`Feeds auto-refresh every ${value} ${refreshUnit.value}`)
+  } catch (e) {
+    toast.fromError(e)
+  }
+}
+
+async function saveRefreshGap() {
+  const value = Math.max(1, Math.floor(Number(gapValue.value) || 0))
+  gapValue.value = value
+  const seconds = durationToSeconds(value, gapUnit.value)
+  try {
+    await api.updateSettings({ min_refresh_gap_seconds: seconds })
+    toast.success(`Minimum gap between manual refreshes: ${value} ${gapUnit.value}`)
   } catch (e) {
     toast.fromError(e)
   }
@@ -232,34 +269,28 @@ function downloadText(filename: string, text: string, mime: string) {
           <label class="retention">
             <span class="retention__label">Fetch logs older than</span>
             <span class="retention__control">
-              <input
-                v-model.number="cleanupDays"
-                class="retention__input"
-                type="number"
-                min="0"
-                step="1"
+              <DurationInput
+                v-model:value="cleanupValue"
+                v-model:unit="cleanupUnit"
+                :min="0"
                 :disabled="settingsLoading"
-                aria-label="Auto-clean fetch logs older than (days)"
+                aria-label="Auto-clean fetch logs older than"
                 @change="saveCleanupDays"
               />
-              <span class="retention__unit">days</span>
             </span>
             <span class="retention__hint">Set to 0 to keep logs indefinitely.</span>
           </label>
           <label class="retention">
             <span class="retention__label">Render cache older than</span>
             <span class="retention__control">
-              <input
-                v-model.number="renderCleanupDays"
-                class="retention__input"
-                type="number"
-                min="0"
-                step="1"
+              <DurationInput
+                v-model:value="renderValue"
+                v-model:unit="renderUnit"
+                :min="0"
                 :disabled="settingsLoading"
-                aria-label="Auto-clean render cache older than (days)"
+                aria-label="Auto-clean render cache older than"
                 @change="saveRenderCleanupDays"
               />
-              <span class="retention__unit">days</span>
             </span>
             <span class="retention__hint">Set to 0 to never clean cached articles.</span>
           </label>
@@ -278,19 +309,30 @@ function downloadText(filename: string, text: string, mime: string) {
           <label class="retention">
             <span class="retention__label">Refresh feeds every</span>
             <span class="retention__control">
-              <input
-                v-model.number="refreshInterval"
-                class="retention__input"
-                type="number"
-                min="1"
-                step="1"
+              <DurationInput
+                v-model:value="refreshValue"
+                v-model:unit="refreshUnit"
+                :min="1"
                 :disabled="settingsLoading"
-                aria-label="Auto-refresh interval (minutes)"
+                aria-label="Auto-refresh interval"
                 @change="saveRefreshInterval"
               />
-              <span class="retention__unit">minutes</span>
             </span>
             <span class="retention__hint">Changes take effect on the next cycle.</span>
+          </label>
+          <label class="retention">
+            <span class="retention__label">Minimum gap between manual refreshes</span>
+            <span class="retention__control">
+              <DurationInput
+                v-model:value="gapValue"
+                v-model:unit="gapUnit"
+                :min="1"
+                :disabled="settingsLoading"
+                aria-label="Minimum gap between manual refreshes"
+                @change="saveRefreshGap"
+              />
+            </span>
+            <span class="retention__hint">Feeds refreshed within this window are skipped on a manual refresh-all.</span>
           </label>
         </div>
       </section>
@@ -571,30 +613,6 @@ function downloadText(filename: string, text: string, mime: string) {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-}
-.retention__input {
-  width: 58px;
-  padding: 6px 7px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 12px;
-  text-align: right;
-}
-.retention__input:focus {
-  border-color: var(--accent);
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
-}
-.retention__input:disabled {
-  background: var(--bg-hover);
-  cursor: wait;
-  opacity: 0.65;
-}
-.retention__unit {
-  color: var(--text-muted);
 }
 .retention__hint {
   grid-column: 1 / -1;

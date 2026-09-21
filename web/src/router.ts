@@ -1,9 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { isAuthenticated } from './providers/auth'
-import LoginView from './views/LoginView.vue'
-import FeedLayout from './views/FeedLayout.vue'
-import StatsView from './views/StatsView.vue'
-import NotFoundView from './views/NotFoundView.vue'
+
+// Views are lazy-loaded so the initial bundle stays small and each page's chunk
+// (and its heavy deps, e.g. the feed stats chart) is fetched only on demand.
+const LoginView = () => import('./views/LoginView.vue')
+const FeedLayout = () => import('./views/FeedLayout.vue')
+const StatsView = () => import('./views/StatsView.vue')
+const NotFoundView = () => import('./views/NotFoundView.vue')
 
 export const router = createRouter({
   history: createWebHistory(),

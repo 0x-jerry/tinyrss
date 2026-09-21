@@ -44,10 +44,26 @@ const safeHtml = computed(() => {
   return DOMPurify.sanitize(d.content || d.summary || '')
 })
 
-// Content mode renders the sanitized body inside an isolated iframe srcdoc.
+// Content mode renders the sanitized body inside an isolated iframe srcdoc. The
+// header lives inside the document so it scrolls away with the article.
 const contentDoc = computed(() => {
   const html = safeHtml.value
-  return html ? buildContentDocument(html) : ''
+  return html ? buildContentDocument(html, contentHeader.value) : ''
+})
+
+const contentHeader = computed<{ title: string; meta: string } | undefined>(() => {
+  const d = detail.value
+  if (!d) return undefined
+  const meta = [d.feed_title, d.author, publishedLabel.value].filter(Boolean).join(' · ')
+  return { title: d.title, meta }
+})
+
+const publishedLabel = computed(() => {
+  const iso = detail.value?.published_at
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 })
 
 // Server-mode HTML is a derived value: it re-evaluates (cancelling any stale
@@ -147,6 +163,14 @@ function openUrl() {
           Next <span aria-hidden="true" class="i-lucide-chevron-right" />
         </Button>
       </div>
+      <div v-if="kind !== 'content'" class="reader__content-head">
+        <h1 class="reader__content-title">{{ detail.title }}</h1>
+        <div class="reader__content-meta">
+          <span v-if="detail.feed_title">{{ detail.feed_title }}</span>
+          <span v-if="detail.author"> · {{ detail.author }}</span>
+          <span v-if="publishedLabel"> · {{ publishedLabel }}</span>
+        </div>
+      </div>
       <div v-if="kind === 'server'" class="reader__frame-wrap">
         <iframe v-if="serverHtml" class="reader__frame" :srcdoc="serverHtml" sandbox="" title="Article" />
         <div v-else class="reader__frame-msg">{{ serverError || 'Loading…' }}</div>
@@ -194,6 +218,22 @@ function openUrl() {
   font-family: inherit;
   font-size: 12px;
   color: var(--text-secondary);
+}
+.reader__content-head {
+  padding: 14px 20px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.reader__content-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+}
+.reader__content-meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-faint);
 }
 .reader__frame-wrap {
   flex: 1;

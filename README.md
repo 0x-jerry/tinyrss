@@ -8,9 +8,17 @@ local SQLite database. Classic 3-pane web UI: feeds/folders tree · article list
 ## Features
 
 - Add/rename/delete feeds and folders; unread badges and totals
-- Background feed polling (default every 15m) with conditional GET (304 → skip)
+- Subscribe by a single URL — open the Add dialog with `?add_feed=<url>` (a site
+  homepage or a direct feed URL, autodiscovered); click **Detect** beside the feed
+  URL to auto-fill the name/description/site URL. Adding/updating never fetches
+  feed content itself
+- Background feed polling with conditional GET (304 → skip); the auto-refresh
+  interval is configurable in Settings (default 15m, via `/api/settings`
+  `refresh_interval_minutes`)
 - Read/unread, star, mark-all-read; article list filters (all/unread/starred) + search
 - Full-text search (SQLite FTS5)
+- Statistical page (`/stats`) with per-feed article-trend charts and latest-article times
+- In-app 404 page for unknown URLs
 - OPML import + export
 - Single-access-token auth (optional)
 - Self-contained binary: the Vue build is embedded into the Go executable
@@ -84,7 +92,7 @@ to loopback in that case. In dev (`make dev`) the token is fixed to `tinyrss`.
 | --- | --- | --- | --- |
 | `-addr` | — | `127.0.0.1:8087` | Listen address |
 | `-db` | — | `data/tinyrss.db` | SQLite database path (migrations auto-applied on first run) |
-| `-refresh` | — | `15m` | Poll interval for due feeds |
+| `-refresh` | — | `15m` | Startup default poll interval; once running, the interval set in Settings (`refresh_interval_minutes`, default 15) governs |
 | `-token` | `TINYRSS_TOKEN` | *(empty)* | Access token; env wins over the flag |
 
 ## Backend layout

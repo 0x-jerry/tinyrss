@@ -16,11 +16,15 @@ const feeds = injectFeedsTree()
 const theme = injectTheme()
 const toast = useApiToast()
 
-const themeOptions: { mode: ThemeMode; label: string; icon: string }[] = [
-  { mode: 'system', label: 'System', icon: 'i-lucide-monitor' },
-  { mode: 'light', label: 'Light', icon: 'i-lucide-sun' },
-  { mode: 'dark', label: 'Dark', icon: 'i-lucide-moon' },
+const themeOptions: { mode: ThemeMode; label: string }[] = [
+  { mode: 'system', label: 'System' },
+  { mode: 'light', label: 'Light' },
+  { mode: 'dark', label: 'Dark' },
 ]
+
+function onThemeChange(event: Event) {
+  theme.setMode((event.target as HTMLSelectElement).value as ThemeMode)
+}
 
 const open = defineModel<boolean>({ default: false })
 
@@ -195,38 +199,25 @@ function downloadText(filename: string, text: string, mime: string) {
 
       <div class="layout">
         <div class="layout__left">
-          <section class="section" aria-labelledby="appearance-title">
-            <div class="section__heading">
-              <div>
-                <h4 id="appearance-title" class="section__title">Appearance</h4>
-                <p class="section__description">Choose how TinyRSS looks.</p>
-              </div>
-              <span aria-hidden="true" class="section__icon i-lucide-palette" />
-            </div>
-            <div class="theme-options">
-              <button
-                v-for="opt in themeOptions"
-                :key="opt.mode"
-                class="theme-option"
-                :class="{ 'theme-option--active': theme.state.mode === opt.mode }"
-                type="button"
-                :aria-pressed="theme.state.mode === opt.mode"
-                @click="theme.setMode(opt.mode)"
-              >
-                <span aria-hidden="true" :class="opt.icon" class="theme-option__icon" />
-                {{ opt.label }}
-              </button>
-            </div>
-          </section>
-
-          <section class="section" aria-labelledby="subscriptions-title">
+          <section class="section" aria-labelledby="preferences-title">
         <div class="section__heading">
           <div>
-            <h4 id="subscriptions-title" class="section__title">Subscriptions</h4>
-            <p class="section__description">Move your feeds in or out of TinyRSS.</p>
+            <h4 id="preferences-title" class="section__title">Preferences</h4>
+            <p class="section__description">Tune how TinyRSS looks and manage your subscription data.</p>
           </div>
-          <span aria-hidden="true" class="section__icon i-lucide-rss" />
+          <span aria-hidden="true" class="section__icon i-lucide-tune" />
         </div>
+        <label class="theme-select">
+          <span class="theme-select__label">Theme</span>
+          <select
+            class="theme-select__control"
+            :value="theme.state.mode"
+            @change="onThemeChange"
+          >
+            <option v-for="opt in themeOptions" :key="opt.mode" :value="opt.mode">{{ opt.label }}</option>
+          </select>
+        </label>
+        <div class="preferences-divider"></div>
         <input
           ref="fileInput"
           class="import-input"
@@ -240,7 +231,6 @@ function downloadText(filename: string, text: string, mime: string) {
             <span aria-hidden="true" class="action-card__icon i-lucide-upload" />
             <div class="action-card__content">
               <strong>Import an OPML file</strong>
-              <span>Bring subscriptions from another reader.</span>
             </div>
             <Button class="action-card__button" variant="ghost" :loading="importFile.isLoading" @click="openImport">
               Import
@@ -250,20 +240,19 @@ function downloadText(filename: string, text: string, mime: string) {
             <span aria-hidden="true" class="action-card__icon i-lucide-download" />
             <div class="action-card__content">
               <strong>Export your subscriptions</strong>
-              <span>Download a portable OPML backup.</span>
             </div>
             <Button class="action-card__button" variant="ghost" :loading="exportOpml.isLoading" @click="exportOpml">Export</Button>
           </div>
         </div>
       </section>
 
-      <section class="section" aria-labelledby="retention-title">
+      <section class="section" aria-labelledby="maintenance-title">
         <div class="section__heading">
           <div>
-            <h4 id="retention-title" class="section__title">Auto-clean</h4>
-            <p class="section__description">Choose how long data is kept before it's automatically removed.</p>
+            <h4 id="maintenance-title" class="section__title">Maintenance</h4>
+            <p class="section__description">Control the cleanup and refresh routines TinyRSS runs automatically.</p>
           </div>
-          <span aria-hidden="true" class="section__icon i-lucide-trash-2" />
+          <span aria-hidden="true" class="section__icon i-lucide-wrench" />
         </div>
         <div class="retention-list">
           <label class="retention">
@@ -294,18 +283,6 @@ function downloadText(filename: string, text: string, mime: string) {
             </span>
             <span class="retention__hint">Set to 0 to never clean cached articles.</span>
           </label>
-        </div>
-      </section>
-
-      <section class="section" aria-labelledby="refresh-title">
-        <div class="section__heading">
-          <div>
-            <h4 id="refresh-title" class="section__title">Auto-refresh</h4>
-            <p class="section__description">How often background polling checks your feeds.</p>
-          </div>
-          <span aria-hidden="true" class="section__icon i-lucide-refresh-cw" />
-        </div>
-        <div class="retention-list">
           <label class="retention">
             <span class="retention__label">Refresh feeds every</span>
             <span class="retention__control">
@@ -420,7 +397,7 @@ function downloadText(filename: string, text: string, mime: string) {
   flex: 1;
   display: flex;
   min-width: 0;
-  height: 524px;
+  height: 542px;
 }
 .intro {
   display: flex;
@@ -487,36 +464,33 @@ function downloadText(filename: string, text: string, mime: string) {
   align-items: center;
   gap: 10px;
 }
-.theme-options {
+.theme-select {
   display: flex;
-  gap: 6px;
-}
-.theme-option {
-  display: inline-flex;
-  flex: 1;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.theme-select__control {
+  width: 140px;
   padding: 6px 8px;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   background: var(--surface);
-  color: var(--text-muted);
+  color: var(--text);
   font: inherit;
   font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
 }
-.theme-option:hover {
-  background: var(--bg-hover);
-}
-.theme-option--active {
+.theme-select__control:focus {
   border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-soft-text);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
-.theme-option__icon {
-  font-size: 14px;
+.preferences-divider {
+  margin-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 12px;
 }
 .filter-btn {
   display: inline-flex;
@@ -549,45 +523,37 @@ function downloadText(filename: string, text: string, mime: string) {
   gap: 8px;
 }
 .action-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
-  align-items: stretch;
-  gap: 7px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
-  padding: 10px;
+  padding: 5px 8px;
   border: 1px solid var(--border-subtle);
   border-radius: 7px;
   background: var(--bg-subtle);
 }
 .action-card__icon {
-  grid-row: 1 / 3;
-  align-self: start;
-  margin-top: 2px;
+  flex: none;
   color: var(--accent);
-  font-size: 15px;
+  font-size: 14px;
 }
 .action-card__content {
   display: flex;
   min-width: 0;
+  flex: 1;
   flex-direction: column;
-  gap: 2px;
-  align-self: start;
+  gap: 1px;
 }
 .action-card__content strong {
+  overflow: hidden;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
-}
-.action-card__content span {
-  color: var(--text-faint);
-  font-size: 11px;
-  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .action-card__button {
-  grid-column: 1 / -1;
-  justify-content: center;
-  width: 100%;
+  flex: none;
 }
 .retention-list {
   display: flex;

@@ -3,6 +3,7 @@ import type {
   DiscoveredFeed,
   Feed,
   FeedRefreshResult,
+  FeedStatsResponse,
   FetchLog,
   Folder,
   Health,
@@ -67,6 +68,8 @@ export const api = {
   refreshProgress: () => request<RefreshResult>('GET', '/api/refresh/progress'),
   health: () => request<Health>('GET', '/api/health'),
   stats: () => request<Stats>('GET', '/api/stats'),
+  feedStats: (days?: number) =>
+    request<FeedStatsResponse>('GET', `/api/stats/feeds${days ? `?days=${days}` : ''}`),
   importOpml: (form: FormData) => request<OpmlImportResult>('POST', '/api/opml/import', form),
   exportOpml: () => requestText('GET', '/api/opml/export'),
 

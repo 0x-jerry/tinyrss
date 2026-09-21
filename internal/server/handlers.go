@@ -45,6 +45,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/refresh", s.handleRefreshAll)
 	mux.HandleFunc("GET /api/refresh/progress", s.handleRefreshProgress)
 	mux.HandleFunc("GET /api/stats", s.handleStats)
+	mux.HandleFunc("GET /api/stats/feeds", s.handleFeedStats)
 	mux.HandleFunc("GET /api/fetch-logs", s.handleListFetchLogs)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handleUpdateSettings)
@@ -447,6 +448,22 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"items":  items,
 		"unread": unread,
 	})
+}
+
+func (s *Server) handleFeedStats(w http.ResponseWriter, r *http.Request) {
+	days := atoiDefault(r.URL.Query().Get("days"), 30)
+	if days < 1 {
+		days = 1
+	}
+	if days > 365 {
+		days = 365
+	}
+	stats, err := s.repo.GetFeedStats(days)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"days": days, "feeds": stats})
 }
 
 func (s *Server) handleListFetchLogs(w http.ResponseWriter, r *http.Request) {

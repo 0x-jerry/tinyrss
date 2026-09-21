@@ -217,6 +217,11 @@ const refreshPercent = computed(() => {
         <Badge :count="filteredTree.totalUnread" />
       </div>
 
+      <div class="row row--inbox" :class="{ active: route.path === '/stats' }" @click="router.push('/stats')">
+        <span aria-hidden="true" class="i-lucide-chart-line text-[16px]" />
+        <span class="row__label">Statistics</span>
+      </div>
+
       <section v-for="folder in filteredTree.folderNodes" :key="folder.id" class="folder">
         <div
           class="row"

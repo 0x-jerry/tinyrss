@@ -105,3 +105,16 @@ export interface Settings {
   render_cache_cleanup_days: number
   refresh_interval_minutes: number
 }
+
+export interface FeedStat {
+  feed_id: number
+  title: string
+  latest_at: string
+  total: number
+  series: { date: string; count: number }[]
+}
+
+export interface FeedStatsResponse {
+  days: number
+  feeds: FeedStat[]
+}

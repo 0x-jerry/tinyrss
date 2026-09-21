@@ -566,4 +566,56 @@ func TestNotFoundAndSPA(t *testing.T) {
 	}
 }
 
+func TestFeedStatsEndpoint(t *testing.T) {
+	ts, repo := newTestServer(t)
+	feed, err := repo.CreateFeed(repository.Feed{Title: "A", FeedURL: "https://a.example/rss"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AddItems(feed.ID, []repository.Item{
+		{GUID: "a1", Title: "t", PublishedAt: "2024-05-01 10:00:00"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	type statsBody struct {
+		Days  int                   `json:"days"`
+		Feeds []repository.FeedStat `json:"feeds"`
+	}
+
+	resp, body := do(t, ts, "GET", "/api/stats/feeds", token, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("status=%d body=%s", resp.StatusCode, body)
+	}
+	out := decode[statsBody](t, body)
+	if out.Days != 30 {
+		t.Fatalf("default days = %d, want 30", out.Days)
+	}
+	found := false
+	for _, s := range out.Feeds {
+		if s.FeedID == feed.ID && s.Total == 1 && len(s.Series) == 1 && s.LatestAt == "2024-05-01 10:00:00" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("feed A not found with expected stats: %+v", out.Feeds)
+	}
+
+	// days param is clamped to [1, 365].
+	resp, body = do(t, ts, "GET", "/api/stats/feeds?days=9999", token, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("clamp-high status=%d", resp.StatusCode)
+	}
+	if d := decode[statsBody](t, body).Days; d != 365 {
+		t.Fatalf("clamped-high days = %d, want 365", d)
+	}
+	resp, body = do(t, ts, "GET", "/api/stats/feeds?days=0", token, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("clamp-low status=%d", resp.StatusCode)
+	}
+	if d := decode[statsBody](t, body).Days; d != 1 {
+		t.Fatalf("clamped-low days = %d, want 1", d)
+	}
+}
+
 func itoa(n int) string { return strconv.Itoa(n) }

@@ -7,27 +7,21 @@ local SQLite database. Classic 3-pane web UI: feeds/folders tree · article list
 
 ## Features
 
-- Add/rename/delete feeds and folders; unread badges and totals
-- Subscribe by a single URL — open the Add dialog with `?add_feed=<url>` (a site
-  homepage or a direct feed URL, autodiscovered); click **Detect** beside the feed
-  URL to auto-fill the name/description/site URL. Adding/updating never fetches
-  feed content itself
-- Background feed polling with conditional GET (304 → skip); the auto-refresh
-  interval is configurable in Settings (default 15m, via `/api/settings`
-  `refresh_interval_minutes`)
-- Read/unread, star, mark-all-read; article list filters (all/unread/starred) + search
-- Full-text search (SQLite FTS5)
-- Statistical page (`/stats`) with per-feed article-trend charts and latest-article times
-- In-app 404 page for unknown URLs
-- OPML import + export
-- Single-access-token auth (optional)
-- Self-contained binary: the Vue build is embedded into the Go executable
+- Classic 3-pane web UI: feeds/folders tree · article list · reading view, with
+  keyboard shortcuts (`j`/`k` navigate, `m` toggle read)
+- Add/rename/delete feeds and folders, unread badges and totals
+- Subscribe by a single URL (with feed autodiscovery) and auto-fill feed details via **Detect**
+- Background polling with conditional GET (304 → skip); configurable auto-refresh interval
+- Read/unread, star, article filters + full-text search (SQLite FTS5)
+- Built-in reader that extracts article content server-side
+- Statistics page with per-feed article trends
+- OPML import/export; optional token auth
+- Self-contained single binary — the Vue frontend is embedded into the Go executable
 
 ## Stack
 
-- **Backend:** Go 1.22+ — stdlib `net/http` (Go 1.22 `ServeMux`), `modernc.org/sqlite`
-  (pure-Go, no CGO), `github.com/mmcdole/gofeed`
-- **Storage:** SQLite in WAL mode, FTS5 full-text index, versioned migrations
+- **Backend:** Go (stdlib `net/http`, SQLite via `modernc.org/sqlite`, `gofeed` for parsing)
+- **Storage:** SQLite — WAL mode, FTS5 full-text index, versioned migrations
 - **Frontend:** Vue 3 + Vite + TypeScript, managed with **bun**
 
 ## Quick start

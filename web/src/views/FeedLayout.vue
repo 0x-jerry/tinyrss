@@ -115,6 +115,7 @@ useIntervalFn(
     <FeedTree
       class="pane"
       :class="{ 'pane--active': screen === 'feeds' }"
+      :active="screen === 'feeds'"
       @open-list="openScopeList"
       @close="closeFeeds"
     />

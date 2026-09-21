@@ -189,6 +189,7 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
           </div>
         </div>
         <div v-if="hasMore" ref="loadTrigger" class="loadmore">Loading more…</div>
+        <div v-else-if="items.state.items.length && !items.state.loading" class="loadmore">No more articles</div>
       </div>
     </div>
   </section>

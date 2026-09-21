@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useMediaQuery } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import { injectFeedsTree, buildTree } from '../../providers/feedsTree'
 import { injectSelection } from '../../providers/selection'
@@ -17,11 +18,17 @@ import AddFeedModal from './AddFeedModal.vue'
 import EditFeedModal from './EditFeedModal.vue'
 import RenameFolderModal from './RenameFolderModal.vue'
 
+export interface FeedTreeProps {
+  /** Whether this pane is the active full-screen view (mobile screen == feeds). */
+  active?: boolean
+}
+
 export interface FeedTreeEmits {
   openList: []
   close: []
 }
 
+const props = defineProps<FeedTreeProps>()
 const emit = defineEmits<FeedTreeEmits>()
 
 const feeds = injectFeedsTree()
@@ -31,6 +38,8 @@ const toast = useApiToast()
 const route = useRoute()
 const router = useRouter()
 const { uncategorizedCollapsed, isCollapsed, toggleFolder, toggleUncategorized } = useFeedFolds()
+// Fetch-error tooltips are a hover/focus affordance; pointless on touch screens.
+const isMobile = useMediaQuery('(max-width: 768px)')
 
 // ?add_feed=<url> opens the Add feed dialog pre-filled (e.g. a subscribe button
 // on another site); the user clicks Detect then Add.
@@ -68,6 +77,32 @@ const filteredTree = computed(() => {
 
 // While searching, expand every folder so matches inside collapsed ones are visible.
 const expanded = computed(() => search.value.trim().length > 0)
+
+const treeRef = ref<HTMLElement | null>(null)
+
+// When the feeds pane becomes the active mobile screen, reveal and scroll to the
+// currently selected feed so the user lands on the context they left. A feed
+// inside a collapsed folder has no rendered row, so expand its container first,
+// then scroll once the row is on screen (after the next render).
+function revealActiveFeed() {
+  const feedId = selection.state.feedId
+  if (feedId != null) {
+    const feed = feeds.state.feeds.find((f) => f.id === feedId)
+    if (feed) {
+      if (feed.folder_id != null && isCollapsed(feed.folder_id)) toggleFolder(feed.folder_id)
+      else if (feed.folder_id == null && uncategorizedCollapsed.value) toggleUncategorized()
+    }
+  }
+  nextTick(() => {
+    treeRef.value?.querySelector<HTMLElement>('.row--feed.active')?.scrollIntoView({ block: 'nearest' })
+  })
+}
+watch(
+  () => props.active,
+  (active) => {
+    if (active) revealActiveFeed()
+  },
+)
 
 const addFolder = useLoading(async () => {
   const name = newFolderName.value.trim()
@@ -220,7 +255,7 @@ const refreshPercent = computed(() => {
       <Button size="sm" title="Add feed" @click="addFeedOpen = true"><span aria-hidden="true" class="i-lucide-plus text-[16px]" /></Button>
     </div>
 
-    <nav class="tree">
+    <nav ref="treeRef" class="tree">
       <div class="row row--inbox" :class="{ active: selection.state.folderId === null && selection.state.feedId === null }" @click="selectFolder(null)">
         <span aria-hidden="true" class="i-lucide-rss text-[16px]" />
         <span class="row__label">All articles</span>
@@ -260,7 +295,7 @@ const refreshPercent = computed(() => {
             v-for="feed in folder.feeds"
             :key="feed.id"
             :text="feed.fetch_error"
-            :disabled="!feed.fetch_error"
+            :disabled="!feed.fetch_error || isMobile"
           >
             <div
               class="row row--feed"
@@ -303,7 +338,7 @@ const refreshPercent = computed(() => {
             v-for="feed in filteredTree.uncategorized"
             :key="feed.id"
             :text="feed.fetch_error"
-            :disabled="!feed.fetch_error"
+            :disabled="!feed.fetch_error || isMobile"
           >
             <div
               class="row row--feed"

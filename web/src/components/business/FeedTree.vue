@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { injectFeedsTree, buildTree } from '../../providers/feedsTree'
 import { injectSelection } from '../../providers/selection'
 import { injectAuth } from '../../providers/auth'
@@ -27,7 +28,21 @@ const feeds = injectFeedsTree()
 const selection = injectSelection()
 const auth = injectAuth()
 const toast = useApiToast()
+const route = useRoute()
+const router = useRouter()
 const { uncategorizedCollapsed, isCollapsed, toggleFolder, toggleUncategorized } = useFeedFolds()
+
+// ?add_feed=<url> opens the Add feed dialog pre-filled (e.g. a subscribe button
+// on another site); the user clicks Detect then Add.
+const addFeedPreset = ref('')
+onMounted(() => {
+  const url = route.query.add_feed
+  if (typeof url === 'string' && url.trim()) {
+    addFeedPreset.value = url.trim()
+    addFeedOpen.value = true
+    router.replace({ query: {} })
+  }
+})
 
 const newFolderName = ref('')
 const confirmOpen = ref(false)
@@ -311,7 +326,7 @@ const refreshPercent = computed(() => {
     </footer>
 
     <SettingsModal v-model="settingsOpen" />
-    <AddFeedModal v-model="addFeedOpen" />
+    <AddFeedModal v-model="addFeedOpen" :preset-url="addFeedPreset" />
     <EditFeedModal :feed="feedToEdit" v-model="editOpen" />
     <RenameFolderModal :folder="folderToRename" v-model="renameOpen" />
     <ConfirmDialog

@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { injectFeedsTree } from '../../providers/feedsTree'
 import { useApiToast } from '../../api/useApiToast'
 import { api } from '../../api/endpoints'
 import { useLoading } from '../../composables/useLoading'
 import Modal from '../shared/Modal.vue'
 import Button from '../shared/Button.vue'
+
+export interface AddFeedModalProps {
+  // A ?add_feed= URL prefills the field; the user still clicks Detect to
+  // autodiscover a homepage.
+  presetUrl?: string
+}
+
+const props = defineProps<AddFeedModalProps>()
 
 const feeds = injectFeedsTree()
 const toast = useApiToast()
@@ -17,6 +25,13 @@ const feedUrl = ref('')
 const siteUrl = ref('')
 const description = ref('')
 const folderId = ref<number | null>(null)
+
+watch(
+  () => props.presetUrl,
+  (v) => {
+    if (v) feedUrl.value = v
+  },
+)
 
 // Detect fetches the feed to fill the form; add/update never fetch on their own.
 const detect = useLoading(async () => {
@@ -68,7 +83,7 @@ const addFeed = useLoading(async () => {
       <label class="field">
         <span class="field__label">Feed URL</span>
         <div class="field__row">
-          <input v-model="feedUrl" class="field__input field__input--row" type="url" placeholder="https://example.com" aria-label="Feed URL" />
+          <input v-model="feedUrl" class="field__input field__input--row" type="url" placeholder="https://example.com (site or feed URL)" aria-label="Feed URL" />
           <Button type="button" size="sm" :loading="detect.isLoading" title="Detect feed metadata" @click="detect">
             <span aria-hidden="true" class="i-lucide-search text-[14px]" /> Detect
           </Button>

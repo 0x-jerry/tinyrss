@@ -3,6 +3,7 @@ import { isAuthenticated } from './providers/auth'
 import LoginView from './views/LoginView.vue'
 import FeedLayout from './views/FeedLayout.vue'
 import StatsView from './views/StatsView.vue'
+import NotFoundView from './views/NotFoundView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -10,6 +11,7 @@ export const router = createRouter({
     { path: '/login', name: 'login', component: LoginView },
     { path: '/stats', name: 'stats', component: StatsView },
     { path: '/', name: 'home', component: FeedLayout },
+    { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView },
   ],
 })
 

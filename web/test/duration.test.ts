@@ -4,6 +4,7 @@ import { secondsToDuration, durationToSeconds, type DurationUnit } from '../src/
 describe('secondsToDuration', () => {
   it('picks the largest whole unit that divides evenly', () => {
     expect(secondsToDuration(2592000)).toEqual({ value: 30, unit: 'days' })
+    expect(secondsToDuration(7200)).toEqual({ value: 2, unit: 'hours' })
     expect(secondsToDuration(900)).toEqual({ value: 15, unit: 'minutes' })
     expect(secondsToDuration(30)).toEqual({ value: 30, unit: 'seconds' })
   })
@@ -21,6 +22,7 @@ describe('duration round-trip', () => {
   it('converts back to the same seconds for every unit', () => {
     const cases: [number, DurationUnit][] = [
       [5, 'days'],
+      [3, 'hours'],
       [15, 'minutes'],
       [45, 'seconds'],
     ]

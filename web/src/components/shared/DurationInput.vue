@@ -15,7 +15,7 @@ const emit = defineEmits<DurationInputEmits>()
 const value = defineModel<number>('value', { required: true })
 const unit = defineModel<DurationUnit>('unit', { required: true })
 
-const units: DurationUnit[] = ['seconds', 'minutes', 'days']
+const units: DurationUnit[] = ['seconds', 'minutes', 'hours', 'days']
 </script>
 
 <template>

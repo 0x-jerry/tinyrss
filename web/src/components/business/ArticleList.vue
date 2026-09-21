@@ -73,17 +73,44 @@ const markAllRead = useLoading(async () => {
   }
 })
 
-const refreshFeed = useLoading(async () => {
+// Refresh button is shown for a specific feed or the "all articles" scope.
+// Folder scope has no dedicated refresh, so it is excluded.
+const showRefresh = computed(
+  () => selection.state.feedId != null || (selection.state.feedId == null && selection.state.folderId == null),
+)
+const refreshTitle = computed(() => (selection.state.feedId != null ? 'Refresh feed' : 'Refresh all articles'))
+
+const refresh = useLoading(async () => {
   const feedId = selection.state.feedId
-  if (feedId == null) return
+  if (feedId != null) {
+    try {
+      await feeds.refreshFeed(feedId)
+      await items.load()
+      toast.success('Feed refreshed')
+    } catch (e) {
+      toast.fromError(e)
+    }
+    return
+  }
+  // All articles scope: refresh every feed. Guard against re-entry while a
+  // background refresh-all is already running.
+  if (feeds.state.refresh.running) return
   try {
-    await feeds.refreshFeed(feedId)
+    await feeds.refreshAll()
     await items.load()
-    toast.success('Feed refreshed')
+    const { failed } = feeds.state.refresh
+    toast.success(failed > 0 ? `Feeds refreshed (${failed} failed)` : 'Feeds refreshed')
   } catch (e) {
     toast.fromError(e)
   }
 })
+
+// Sync the button's busy state with the global refresh-all progress so the
+// spinner reflects a refresh from any source (this button, FeedTree, or a
+// resumed server job) — but only in the all-articles scope. When a specific
+// feed is selected, the button only reflects its own local refresh and stays
+// independent of any running refresh-all.
+const refreshBusy = computed(() => refresh.isLoading || (selection.state.feedId == null && feeds.state.refresh.running))
 
 const hasMore = computed(() => items.state.page * items.state.limit < items.state.total)
 </script>
@@ -114,15 +141,15 @@ const hasMore = computed(() => items.state.page * items.state.limit < items.stat
           </button>
         </div>
         <Button
-          v-if="selection.state.feedId != null"
+          v-if="showRefresh"
           variant="ghost"
           size="sm"
-          :disabled="refreshFeed.isLoading"
-          title="Refresh feed"
+          :disabled="refreshBusy"
+          :title="refreshTitle"
           class="toolbar__refresh"
-          @click="refreshFeed"
+          @click="refresh"
         >
-          <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" :class="{ spin: refreshFeed.isLoading }" />
+          <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" :class="{ spin: refreshBusy }" />
         </Button>
       </div>
       <div class="toolbar__actions">

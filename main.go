@@ -36,7 +36,7 @@ func main() {
 
 	repo := repository.NewRepo(st.DB)
 	fetcher := feeds.NewFetcher(repo)
-	fetcher.Start(cfg.Refresh)
+	fetcher.Start()
 
 	// go:embed includes the "web/dist" prefix; root the FS at the dist contents.
 	dist, err := fs.Sub(distFS, "web/dist")

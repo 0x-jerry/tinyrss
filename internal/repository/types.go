@@ -11,7 +11,7 @@ const TimeLayout = "2006-01-02 15:04:05"
 const (
 	defaultFetchLogCleanupDays    = 30
 	defaultRenderCacheCleanupDays = 30
-	defaultRefreshIntervalMinutes = 15
+	DefaultRefreshIntervalMinutes = 15
 )
 
 type Folder struct {

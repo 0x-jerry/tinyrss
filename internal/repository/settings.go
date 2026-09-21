@@ -38,7 +38,7 @@ func (r *Repo) GetSettings() (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	ri, err := r.settingValue("refresh_interval_minutes", defaultRefreshIntervalMinutes)
+	ri, err := r.settingValue("refresh_interval_minutes", DefaultRefreshIntervalMinutes)
 	if err != nil {
 		return Settings{}, err
 	}

@@ -438,9 +438,9 @@ func TestRefreshIntervalSetting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.RefreshIntervalMinutes != defaultRefreshIntervalMinutes {
+	if s.RefreshIntervalMinutes != DefaultRefreshIntervalMinutes {
 		t.Fatalf("default refresh interval = %d, want %d",
-			s.RefreshIntervalMinutes, defaultRefreshIntervalMinutes)
+			s.RefreshIntervalMinutes, DefaultRefreshIntervalMinutes)
 	}
 
 	if err := repo.SetRefreshIntervalMinutes(30); err != nil {

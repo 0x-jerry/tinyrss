@@ -94,18 +94,15 @@ func NewFetcher(repo *repository.Repo) *Fetcher {
 }
 
 // Start launches the periodic refresh loop; Stop shuts it down gracefully.
-// The poll interval is re-read from the settings table each cycle (falling
-// back to the Start arg), so a Settings change takes effect on the next tick.
+// The poll interval comes from the settings table each cycle (falling back to
+// the repository default), so a Settings change takes effect on the next tick.
 // RefreshFeed and RefreshAll remain callable without ever calling Start.
-func (f *Fetcher) Start(interval time.Duration) {
+func (f *Fetcher) Start() {
 	f.startOnce.Do(func() {
 		f.stopCh = make(chan struct{})
 		f.stopWg.Go(func() {
-			current := interval
 			for {
-				if s, err := f.repo.GetSettings(); err == nil && s.RefreshIntervalMinutes >= 1 {
-					current = time.Duration(s.RefreshIntervalMinutes) * time.Minute
-				}
+				current := f.refreshInterval()
 				select {
 				case <-time.After(current):
 					f.maybePruneFetchLogs()
@@ -119,6 +116,15 @@ func (f *Fetcher) Start(interval time.Duration) {
 		f.maybePruneFetchLogs()
 		f.maybePruneRenderCache()
 	})
+}
+
+// refreshInterval returns the configured auto-refresh poll interval, falling
+// back to the repository default when unset or unreadable.
+func (f *Fetcher) refreshInterval() time.Duration {
+	if s, err := f.repo.GetSettings(); err == nil && s.RefreshIntervalMinutes >= 1 {
+		return time.Duration(s.RefreshIntervalMinutes) * time.Minute
+	}
+	return repository.DefaultRefreshIntervalMinutes * time.Minute
 }
 
 // maybePruneFetchLogs deletes logs older than the configured retention; a

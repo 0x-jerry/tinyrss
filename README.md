@@ -86,7 +86,6 @@ to loopback in that case. In dev (`make dev`) the token is fixed to `tinyrss`.
 | --- | --- | --- | --- |
 | `-addr` | — | `127.0.0.1:8087` | Listen address |
 | `-db` | — | `data/tinyrss.db` | SQLite database path (migrations auto-applied on first run) |
-| `-refresh` | — | `15m` | Startup default poll interval; once running, the interval set in Settings (`refresh_interval_minutes`, default 15) governs |
 | `-token` | `TINYRSS_TOKEN` | *(empty)* | Access token; env wins over the flag |
 
 ## Backend layout

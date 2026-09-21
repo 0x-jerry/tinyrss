@@ -9,6 +9,7 @@ import { useApiToast } from '../../api/useApiToast'
 import { useFeedFolds } from '../../composables/useFeedFolds'
 import { useLoading } from '../../composables/useLoading'
 import type { Feed } from '../../types/models'
+import pkg from '../../../package.json'
 import Button from '../shared/Button.vue'
 import Badge from '../shared/Badge.vue'
 import Tooltip from '../shared/Tooltip.vue'
@@ -369,9 +370,12 @@ const refreshPercent = computed(() => {
         <Button variant="ghost" size="sm" class="logout" @click="auth.logout()">
           <span aria-hidden="true" class="i-lucide-log-out text-[16px]" /> Log out
         </Button>
-        <Button variant="ghost" size="sm" title="Settings" @click="settingsOpen = true">
-          <span aria-hidden="true" class="i-lucide-settings text-[16px]" />
-        </Button>
+        <div class="footer__actions">
+          <span class="version" :title="`TinyRSS v${pkg.version}`">v{{ pkg.version }}</span>
+          <Button variant="ghost" size="sm" title="Settings" @click="settingsOpen = true">
+            <span aria-hidden="true" class="i-lucide-settings text-[16px]" />
+          </Button>
+        </div>
       </div>
     </footer>
 
@@ -560,6 +564,16 @@ const refreshPercent = computed(() => {
   align-items: center;
   justify-content: space-between;
   padding: 0 12px 12px;
+}
+.footer__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.version {
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
 }
 .spin {
   animation: refresh-spin 1s linear infinite;

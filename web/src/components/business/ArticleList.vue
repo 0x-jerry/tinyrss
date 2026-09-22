@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useVirtualList, useIntersectionObserver } from '@vueuse/core'
-import { injectItems, type Filter } from '../../providers/items'
-import { injectFeedsTree } from '../../providers/feedsTree'
-import { injectSelection } from '../../providers/selection'
+import { useStore } from '../../store'
+import { useViewNav } from '../../composables/useViewNav'
+import type { Filter } from '../../store/items'
 import type { Item } from '../../types/models'
 import Button from '../shared/Button.vue'
 import EmptyState from '../shared/EmptyState.vue'
@@ -11,9 +11,8 @@ import { useApiToast } from '../../api/useApiToast'
 import { useLoading } from '../../composables/useLoading'
 import { nearestScrollTop } from '../../utils/scrollIntoViewNearest'
 
-const items = injectItems()
-const feeds = injectFeedsTree()
-const selection = injectSelection()
+const { items, feeds } = useStore()
+const nav = useViewNav()
 const toast = useApiToast()
 
 export interface ArticleListProps {
@@ -49,7 +48,7 @@ const { list: rows, containerProps, wrapperProps } = useVirtualList(source, { it
 // only scroll when the row is out of view, aligning to the near edge.
 async function scrollToActive() {
   await nextTick()
-  const id = selection.state.itemId
+  const id = nav.state.itemId
   if (id == null) return
   const idx = source.value.findIndex((i) => i.id === id)
   if (idx === -1) return
@@ -62,7 +61,7 @@ async function scrollToActive() {
 // reader/feeds) or when the selected article changes while the list is shown
 // (reader nav, j/k). Gating on props.active skips mobile reader-side item changes,
 // where the list pane is hidden.
-watch([() => props.active, () => selection.state.itemId], () => {
+watch([() => props.active, () => nav.state.itemId], () => {
   if (props.active) scrollToActive()
 })
 
@@ -111,12 +110,12 @@ const markAllRead = useLoading(async () => {
 // Refresh button is shown for a specific feed or the "all articles" scope.
 // Folder scope has no dedicated refresh, so it is excluded.
 const showRefresh = computed(
-  () => selection.state.feedId != null || (selection.state.feedId == null && selection.state.folderId == null),
+  () => nav.state.feedId != null || (nav.state.feedId == null && nav.state.folderId == null),
 )
-const refreshTitle = computed(() => (selection.state.feedId != null ? 'Refresh feed' : 'Refresh all articles'))
+const refreshTitle = computed(() => (nav.state.feedId != null ? 'Refresh feed' : 'Refresh all articles'))
 
 const refresh = useLoading(async () => {
-  const feedId = selection.state.feedId
+  const feedId = nav.state.feedId
   if (feedId != null) {
     try {
       await feeds.refreshFeed(feedId)
@@ -145,11 +144,10 @@ const refresh = useLoading(async () => {
 // resumed server job) — but only in the all-articles scope. When a specific
 // feed is selected, the button only reflects its own local refresh and stays
 // independent of any running refresh-all.
-const refreshBusy = computed(() => refresh.isLoading || (selection.state.feedId == null && feeds.state.refresh.running))
+const refreshBusy = computed(() => refresh.isLoading || (nav.state.feedId == null && feeds.state.refresh.running))
 
 const hasMore = computed(() => items.state.page * items.state.limit < items.state.total)
 
-// Compact publish date: "Sep 21" for the current year, "Dec 3, 2024" otherwise.
 function dateLabel(iso: string): string {
   if (!iso) return ''
   const d = new Date(iso)
@@ -217,7 +215,7 @@ function dateLabel(iso: string): string {
           v-for="{ data } in rows"
           :key="data.id"
           class="row"
-          :class="{ active: selection.state.itemId === data.id, read: data.is_read }"
+          :class="{ active: nav.state.itemId === data.id, read: data.is_read }"
           :style="{ height: ITEM_HEIGHT + 'px' }"
           @click="select(data)"
         >

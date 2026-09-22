@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { injectFeedsTree } from '../../providers/feedsTree'
+import { useStore } from '../../store'
 import { useApiToast } from '../../api/useApiToast'
 import { api } from '../../api/endpoints'
 import { useLoading } from '../../composables/useLoading'
@@ -15,7 +15,7 @@ export interface AddFeedModalProps {
 
 const props = defineProps<AddFeedModalProps>()
 
-const feeds = injectFeedsTree()
+const { feeds } = useStore()
 const toast = useApiToast()
 
 const open = defineModel<boolean>({ default: false })

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { injectFeedsTree } from '../../providers/feedsTree'
-import { injectTheme, type ThemeMode } from '../../providers/theme'
+import { useStore } from '../../store'
+import type { ThemeMode } from '../../store/theme'
 import { useApiToast } from '../../api/useApiToast'
 import { useLoading } from '../../composables/useLoading'
 import { api } from '../../api/endpoints'
@@ -12,8 +12,7 @@ import Modal from '../shared/Modal.vue'
 import Button from '../shared/Button.vue'
 import DurationInput from '../shared/DurationInput.vue'
 
-const feeds = injectFeedsTree()
-const theme = injectTheme()
+const { feeds, theme } = useStore()
 const toast = useApiToast()
 
 const themeOptions: { mode: ThemeMode; label: string }[] = [

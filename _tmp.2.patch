@@ -1,0 +1,157 @@
+diff --git a/web/src/components/business/FeedTree.vue b/web/src/components/business/FeedTree.vue
+index 1aa114a..b30de48 100644
+--- a/web/src/components/business/FeedTree.vue
++++ b/web/src/components/business/FeedTree.vue
+@@ -25,7 +25,6 @@ export interface FeedTreeProps {
+ }
+ 
+ export interface FeedTreeEmits {
+-  openList: []
+   close: []
+ }
+ 
+@@ -157,11 +156,9 @@ async function doDelete() {
+   const target = pendingDelete.value
+   if (!target) return
+   try {
+-    let cleared = false
+     if (target.kind === 'feed') {
+       if (nav.state.feedId === target.id) {
+         nav.selectFeed(null)
+-        cleared = true
+       }
+       await feeds.deleteFeed(target.id)
+     } else {
+@@ -169,9 +166,6 @@ async function doDelete() {
+     }
+     toast.success(target.kind === 'feed' ? 'Feed deleted' : 'Folder deleted')
+     pendingDelete.value = null
+-    // The selected feed no longer exists: point the URL back at the
+-    // All-articles scope instead of a now-invalid id.
+-    if (cleared) emit('openList')
+   } catch (e) {
+     toast.fromError(e)
+     throw e
+@@ -180,12 +174,10 @@ async function doDelete() {
+ 
+ function selectAll() {
+   nav.clear()
+-  emit('openList')
+ }
+ 
+ function selectFeed(id: number) {
+   nav.selectFeed(id)
+-  emit('openList')
+ }
+ 
+ function onDragStart(feed: Feed) {
+diff --git a/web/src/composables/useViewNav.ts b/web/src/composables/useViewNav.ts
+index 71e39f8..f6fcaea 100644
+--- a/web/src/composables/useViewNav.ts
++++ b/web/src/composables/useViewNav.ts
+@@ -1,5 +1,5 @@
+ import { reactive, readonly, ref, type Ref, watch } from 'vue'
+-import { createSharedComposable } from '@vueuse/core'
++import { createSharedComposable, useMediaQuery } from '@vueuse/core'
+ import { useRoute, useRouter, type LocationQuery } from 'vue-router'
+ 
+ export type MobileScreen = 'feeds' | 'list' | 'reader'
+@@ -105,6 +105,7 @@ export const useViewNav = createSharedComposable((): ViewNav => {
+   // route would race an in-flight push and drop the screen when an item change
+   // is written right after opening the reader.
+   const screen = ref<MobileScreen>(parseView(route.query).view)
++  const isMobile = useMediaQuery('(max-width: 768px)')
+ 
+   function buildQuery(patch: Partial<ViewState> = {}): LocationQuery {
+     return mergeQuery(route.query, {
+@@ -174,12 +175,41 @@ export const useViewNav = createSharedComposable((): ViewNav => {
+     }
+   }
+ 
++  // Selecting a scope is one gesture: commit the selection, then open the list.
++  // On mobile, picking a *different* feed first swaps the current entry for the
++  // feeds screen (back from the list returns to feeds); re-selecting the current
++  // feed, e.g. its name in the reader, skips that detour. Desktop just pushes
++  // the new scope — its list is always visible.
++  function openScope(previousFeedId: number | null) {
++    const feedId = state.feedId
++    const scope: Partial<ViewState> = { feedId }
++
++    if (isMobile.value && previousFeedId !== feedId) {
++      replace({ ...scope, view: 'feeds' })
++    }
++
++    const patch: Partial<ViewState> = { ...scope }
++    if (isMobile.value) patch.view = 'list'
++    push(patch)
++  }
++
++  function selectFeed(id: number | null) {
++    const previousFeedId = state.feedId
++    commit({ feedId: id }, true)
++    openScope(previousFeedId)
++  }
++  function clearView() {
++    const previousFeedId = state.feedId
++    commit({ feedId: null, itemId: null }, true)
++    openScope(previousFeedId)
++  }
++
+   return {
+     state: readonly(state),
+     screen: readonly(screen),
+-    selectFeed: (id) => commit({ feedId: id }, true),
++    selectFeed,
+     selectItem: (id) => commit({ itemId: id }, false),
+-    clear: () => commit({ feedId: null, itemId: null }, true),
++    clear: clearView,
+     onScopeChange: (fn) => {
+       onScope = fn
+     },
+diff --git a/web/src/views/FeedLayout.vue b/web/src/views/FeedLayout.vue
+index 5e5a6d7..9b973a8 100644
+--- a/web/src/views/FeedLayout.vue
++++ b/web/src/views/FeedLayout.vue
+@@ -18,7 +18,6 @@ const feedTreeRef = ref<InstanceType<typeof FeedTree> | null>(null)
+ function selectFeedFromReader(feedId: number) {
+   nav.selectFeed(feedId)
+   feedTreeRef.value?.scrollToFeed(feedId)
+-  openScopeList()
+ }
+ 
+ // Which pane is full-screen on mobile comes from the URL, so the browser
+@@ -49,26 +48,6 @@ onMounted(async () => {
+   }
+ })
+ 
+-// Scope changes and mobile screen transitions push a history entry (back works),
+-// so the selected feed/folder and the open screen both become shareable links.
+-async function openScopeList() {
+-  const feedId = nav.state.feedId
+-  const scope: Partial<ViewState> = { feedId, itemId: null }
+-  if (isMobile.value && feedId != null) {
+-    // Selecting a scope on mobile moves through the feeds screen first: replace
+-    // the current feeds entry with the chosen feed/folder so it survives as the
+-    // previous entry (back from the list returns to feeds), then push the list.
+-    // The replace must settle before the push — an overlapping push would cancel
+-    // it and collapse the two steps into one.
+-    await nav.replace({ ...scope, view: 'feeds' })
+-    nav.push({ ...scope, view: 'list' })
+-    return
+-  }
+-  const patch: Partial<ViewState> = { ...scope }
+-  if (isMobile.value) patch.view = 'list'
+-  nav.push(patch)
+-}
+-
+ function openFeeds() {
+   nav.push({ view: 'feeds' })
+ }
+@@ -116,7 +95,6 @@ useIntervalFn(
+       class="pane"
+       :class="{ 'pane--active': screen === 'feeds' }"
+       :active="screen === 'feeds'"
+-      @open-list="openScopeList"
+       @close="closeFeeds"
+     />
+     <ArticleList

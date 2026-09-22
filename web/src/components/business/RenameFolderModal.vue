@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { injectFeedsTree } from '../../providers/feedsTree'
+import { useStore } from '../../store'
 import { useApiToast } from '../../api/useApiToast'
 import { useLoading } from '../../composables/useLoading'
 import Modal from '../shared/Modal.vue'
@@ -14,7 +14,7 @@ const props = defineProps<RenameFolderModalProps>()
 
 const open = defineModel<boolean>({ default: false })
 
-const feeds = injectFeedsTree()
+const { feeds } = useStore()
 const toast = useApiToast()
 
 const name = ref('')

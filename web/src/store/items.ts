@@ -1,8 +1,5 @@
-import { inject, reactive, readonly, provide } from 'vue'
+import { reactive, readonly } from 'vue'
 import { useLocalStorage } from '@vueuse/core'
-import { itemsKey } from './keys'
-import type { SelectionProvider } from './selection'
-import type { FeedsTreeProvider } from './feedsTree'
 import { api } from '../api/endpoints'
 import type { Item, ItemDetail } from '../types/models'
 
@@ -57,7 +54,7 @@ export interface ItemsDeps {
   adjustUnread?: (feedId: number, delta: number) => void
 }
 
-export interface ItemsProvider {
+export interface ItemsStore {
   state: Readonly<ItemsState>
   load: () => Promise<void>
   nextPage: () => Promise<void>
@@ -91,7 +88,7 @@ export function buildItemQuery(
   return p.toString()
 }
 
-export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
+export function createItemsStore(deps: ItemsDeps): ItemsStore {
   // Each feed/folder (and "all articles") remembers its own filter.
   const filters = useLocalStorage<Partial<Record<ScopeKey, Filter>>>(SCOPE_FILTERS_KEY, {}, {
     serializer: scopeFiltersSerializer,
@@ -218,28 +215,3 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
   }
 }
 
-export function provideItems(deps: {
-  selection: SelectionProvider
-  feedsTree: FeedsTreeProvider
-}): ItemsProvider {
-  const provider = createItemsProvider({
-    getSelection: () => ({
-      feedId: deps.selection.state.feedId,
-      folderId: deps.selection.state.folderId,
-    }),
-    selectItem: deps.selection.selectItem,
-    onItemsChanged: () => deps.feedsTree.reload(),
-    adjustUnread: (feedId, delta) => deps.feedsTree.adjustUnread(feedId, delta),
-  })
-  // Reload the list whenever the feed/folder scope changes. No observer: the
-  // selection provider invokes this from its scope-changing mutators.
-  deps.selection.onScopeChange(() => provider.load())
-  provide(itemsKey, provider)
-  return provider
-}
-
-export function injectItems(): ItemsProvider {
-  const p = inject<ItemsProvider>(itemsKey)
-  if (!p) throw new Error('items provider not provided')
-  return p
-}

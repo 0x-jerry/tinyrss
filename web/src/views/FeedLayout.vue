@@ -1,28 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useIntervalFn, useMediaQuery } from '@vueuse/core'
-import { injectFeedsTree } from '../providers/feedsTree'
-import { injectSelection } from '../providers/selection'
-import { injectItems } from '../providers/items'
+import { useStore } from '../store'
 import { useApiToast } from '../api/useApiToast'
 import { useViewNav, type ViewState } from '../composables/useViewNav'
 import FeedTree from '../components/business/FeedTree.vue'
 import ArticleList from '../components/business/ArticleList.vue'
 import ReaderPane from '../components/business/ReaderPane.vue'
 
-const feeds = injectFeedsTree()
-const selection = injectSelection()
-const items = injectItems()
+const { feeds, items } = useStore()
 const toast = useApiToast()
-const nav = useViewNav(selection)
+const nav = useViewNav()
 const isMobile = useMediaQuery('(max-width: 768px)')
 
 const feedTreeRef = ref<InstanceType<typeof FeedTree> | null>(null)
 
-// Clicking a feed name in the reader selects that feed, opens its list, and
-// scrolls the feed tree to the selected feed's row.
 function selectFeedFromReader(feedId: number) {
-  selection.selectFeed(feedId)
+  nav.selectFeed(feedId)
   feedTreeRef.value?.scrollToFeed(feedId)
   openScopeList()
 }
@@ -36,17 +30,15 @@ onMounted(async () => {
     await feeds.reload()
     await items.load()
     // Reopen the article into the reader: on desktop the reader is always
-    // visible; on mobile only when the URL asks for it (a deep link). A restored
-    // session on mobile stays on the list, matching the old behavior, without
-    // fetching and marking the last article read. If the item no longer exists
-    // (a shared link to a deleted/stale article) clear it so the dead id isn't
-    // kept in the selection, localStorage, or URL and re-fetched on every load.
-    const itemId = selection.state.itemId
+    // visible; on mobile only when the URL asks for it (a deep link). If the item
+    // no longer exists (a shared link to a deleted/stale article) clear it so the
+    // dead id isn't kept in the URL and re-fetched on every load.
+    const itemId = nav.state.itemId
     if (itemId != null && (!isMobile.value || nav.screen.value === 'reader')) {
       try {
         await items.openItem(itemId)
       } catch {
-        selection.selectItem(null)
+        nav.selectItem(null)
       }
     }
     // Resume a refresh-all that was already running when this page loaded, so
@@ -60,8 +52,8 @@ onMounted(async () => {
 // Scope changes and mobile screen transitions push a history entry (back works),
 // so the selected feed/folder and the open screen both become shareable links.
 async function openScopeList() {
-  const feedId = selection.state.feedId
-  const folderId = selection.state.folderId
+  const feedId = nav.state.feedId
+  const folderId = nav.state.folderId
   const scope: Partial<ViewState> = { feedId, folderId, itemId: null }
   if (isMobile.value && (feedId != null || folderId != null)) {
     // Selecting a scope on mobile moves through the feeds screen first: replace
@@ -86,7 +78,7 @@ function openReader() {
   // Desktop's reader is always visible, so opening an article only replaces the
   // item param (back returns to the previous scope, not through every article).
   // On mobile it's a screen transition (push) so back returns to the list.
-  const patch: Partial<ViewState> = { itemId: selection.state.itemId }
+  const patch: Partial<ViewState> = { itemId: nav.state.itemId }
   if (isMobile.value) {
     patch.view = 'reader'
     nav.push(patch)
@@ -101,7 +93,7 @@ function closeReader() {
   // carries that earlier itemId), so the returned list would highlight the previous
   // article. Pushing the list with the live itemId keeps the current article active
   // and lets back return to the reader.
-  nav.push({ view: 'list', itemId: selection.state.itemId })
+  nav.push({ view: 'list', itemId: nav.state.itemId })
 }
 
 function closeFeeds() {

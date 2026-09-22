@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createFeedsTreeProvider } from '../src/providers/feedsTree'
+import { createFeedsStore } from '../src/store/feeds'
 import { api } from '../src/api/endpoints'
 import type { Feed, Folder, RefreshResult } from '../src/types/models'
 
@@ -26,7 +26,7 @@ vi.mock('../src/api/endpoints', () => ({
 function withFeedsTree(feeds: Feed[], folders: Folder[] = []) {
   vi.mocked(api.listFeeds).mockResolvedValue(feeds)
   vi.mocked(api.listFolders).mockResolvedValue(folders)
-  return createFeedsTreeProvider()
+  return createFeedsStore()
 }
 
 describe('feedsTree provider import/export', () => {
@@ -34,7 +34,7 @@ describe('feedsTree provider import/export', () => {
     vi.mocked(api.importOpml).mockResolvedValue({ added: 3 })
     withFeedsTree([] as Feed[])
 
-    const provider = createFeedsTreeProvider()
+    const provider = createFeedsStore()
     const added = await provider.importOpmlForm(new FormData())
 
     expect(added).toBe(3)
@@ -48,7 +48,7 @@ describe('feedsTree provider import/export', () => {
     const opml = '<?xml version="1.0"?><opml version="2.0"><body/></opml>'
     vi.mocked(api.exportOpml).mockResolvedValue(opml)
 
-    const provider = createFeedsTreeProvider()
+    const provider = createFeedsStore()
 
     await expect(provider.exportOpmlText()).resolves.toBe(opml)
   })
@@ -58,7 +58,7 @@ describe('feedsTree provider import/export', () => {
     vi.mocked(api.createFeed).mockResolvedValue(feed)
     withFeedsTree([] as Feed[])
 
-    const provider = createFeedsTreeProvider()
+    const provider = createFeedsStore()
     const created = await provider.addFeed({ feed_url: 'https://x.example/rss', folder_id: 3 })
 
     expect(created).toBe(feed)
@@ -71,7 +71,7 @@ describe('feedsTree provider import/export', () => {
     vi.mocked(api.updateFeed).mockResolvedValue({ ...feed, title: 'New' })
     withFeedsTree([feed])
 
-    const provider = createFeedsTreeProvider()
+    const provider = createFeedsStore()
     const patch = {
       title: 'New',
       feed_url: 'https://x.example/rss2',
@@ -133,7 +133,7 @@ describe('feedsTree provider import/export', () => {
       .mockResolvedValueOnce(idle)
     withFeedsTree([] as Feed[])
 
-    const provider = createFeedsTreeProvider()
+    const provider = createFeedsStore()
     await provider.refreshAll()
 
     expect(api.refreshAllFeeds).toHaveBeenCalled()

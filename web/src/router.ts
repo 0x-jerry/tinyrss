@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { isAuthenticated } from './providers/auth'
+import { isAuthenticated } from './store/auth'
 
 // Views are lazy-loaded so the initial bundle stays small and each page's chunk
 // (and its heavy deps, e.g. the feed stats chart) is fetched only on demand.

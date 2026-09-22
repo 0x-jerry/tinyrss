@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { buildItemQuery, createItemsProvider, scopeKeyOf, parseScopeFilters } from '../src/providers/items'
+import { buildItemQuery, createItemsStore, scopeKeyOf, parseScopeFilters } from '../src/store/items'
 import { api } from '../src/api/endpoints'
 import type { ItemsResponse } from '../src/types/models'
 
@@ -71,7 +71,7 @@ describe('items provider', () => {
   })
 
   function provider() {
-    return createItemsProvider({ getSelection: () => selection, onItemsChanged, adjustUnread })
+    return createItemsStore({ getSelection: () => selection, onItemsChanged, adjustUnread })
   }
 
   it('loads the first page', async () => {
@@ -108,7 +108,7 @@ describe('items provider', () => {
         ? ({ items: [], total: 0, page: 1, limit: 50 } as ItemsResponse)
         : ({ items: [item(1)], total: 1, page: 1, limit: 50 } as ItemsResponse)
     })
-    const p = createItemsProvider({ getSelection: () => selection, onItemsChanged })
+    const p = createItemsStore({ getSelection: () => selection, onItemsChanged })
     expect(p.state.filter).toBe('unread')
     await p.load()
     expect(p.state.filter).toBe('all')
@@ -124,7 +124,7 @@ describe('items provider', () => {
       queries.push(query)
       return { items: [item(1)], total: 1, page: 1, limit: 50 } as ItemsResponse
     })
-    const p = createItemsProvider({ getSelection: () => sel, onItemsChanged })
+    const p = createItemsStore({ getSelection: () => sel, onItemsChanged })
     // Choose starred on feed 7...
     sel.feedId = 7
     await p.setFilter('starred')
@@ -159,7 +159,7 @@ describe('items provider', () => {
       const unread = query.includes('unread=true')
       return { items: unread ? [item(1)] : [], total: 1, page: 1, limit: 50 } as ItemsResponse
     })
-    const p = createItemsProvider({ getSelection: () => selection, onItemsChanged })
+    const p = createItemsStore({ getSelection: () => selection, onItemsChanged })
     await p.load()
     expect(p.state.filter).toBe('unread')
     expect(p.state.items.length).toBe(1)
@@ -171,7 +171,7 @@ describe('items provider', () => {
         ? ({ items: [], total: 0, page: 1, limit: 50 } as ItemsResponse)
         : ({ items: [item(1)], total: 1, page: 1, limit: 50 } as ItemsResponse),
     )
-    const p = createItemsProvider({ getSelection: () => selection, onItemsChanged })
+    const p = createItemsStore({ getSelection: () => selection, onItemsChanged })
     await p.setFilter('unread')
     expect(p.state.filter).toBe('unread')
     expect(p.state.items.length).toBe(0)
@@ -208,7 +208,7 @@ describe('items provider', () => {
     vi.mocked(api.setItemState).mockImplementation(async (_id: number, action: string) => {
       actions.push(action)
     })
-    const p = createItemsProvider({ getSelection: () => selection, onItemsChanged, adjustUnread })
+    const p = createItemsStore({ getSelection: () => selection, onItemsChanged, adjustUnread })
     await p.load()
     await p.toggleRead(p.state.items[0].id)
     expect(p.state.items[0].is_read).toBe(true)
@@ -222,7 +222,7 @@ describe('items provider', () => {
 
   it('openItem marks read optimistically and decrements the feed badge', async () => {
     vi.mocked(api.getItem).mockResolvedValue({ ...item(1), summary: '', content: '' })
-    const p = createItemsProvider({ getSelection: () => selection, onItemsChanged, adjustUnread })
+    const p = createItemsStore({ getSelection: () => selection, onItemsChanged, adjustUnread })
     await p.load()
     await p.openItem(p.state.items[0].id)
     expect(p.state.items[0].is_read).toBe(true)
@@ -235,7 +235,7 @@ describe('items provider', () => {
       actions.push(action)
     })
     vi.mocked(api.getItem).mockResolvedValue({ ...item(1), is_read: true, summary: '', content: '' })
-    const p = createItemsProvider({ getSelection: () => selection, onItemsChanged, adjustUnread })
+    const p = createItemsStore({ getSelection: () => selection, onItemsChanged, adjustUnread })
     await p.load()
     await p.openItem(p.state.items[0].id)
     expect(adjustUnread).not.toHaveBeenCalled()
@@ -247,7 +247,7 @@ describe('items provider', () => {
     vi.mocked(api.setItemState).mockImplementation(async (_id: number, action: string) => {
       actions.push(action)
     })
-    const p = createItemsProvider({ getSelection: () => selection, onItemsChanged })
+    const p = createItemsStore({ getSelection: () => selection, onItemsChanged })
     await p.load()
     await p.toggleStar(p.state.items[0].id)
     expect(p.state.items[0].is_starred).toBe(true)

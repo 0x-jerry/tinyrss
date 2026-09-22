@@ -2,9 +2,8 @@
 import { computed, ref } from 'vue'
 import DOMPurify from 'dompurify'
 import { computedAsync } from '@vueuse/core'
-import { injectItems } from '../../providers/items'
-import { injectSelection } from '../../providers/selection'
-import { injectFeedsTree } from '../../providers/feedsTree'
+import { useStore } from '../../store'
+import { useViewNav } from '../../composables/useViewNav'
 import { useApiToast } from '../../api/useApiToast'
 import { api } from '../../api/endpoints'
 import { renderKind } from '../../helpers'
@@ -20,22 +19,21 @@ export interface ReaderPaneEmits {
 
 const emit = defineEmits<ReaderPaneEmits>()
 
-const items = injectItems()
-const selection = injectSelection()
-const feedsTree = injectFeedsTree()
+const { items, feeds: feedsTree } = useStore()
+const nav = useViewNav()
 const toast = useApiToast()
-const { move } = useItemNav(items, selection)
+const { move } = useItemNav(items, nav)
 
 const detail = computed(() => items.state.selectedItem)
 
 const listItem = computed(() =>
-  selection.state.itemId == null ? null : items.state.items.find((i) => i.id === selection.state.itemId) ?? null,
+  nav.state.itemId == null ? null : items.state.items.find((i) => i.id === nav.state.itemId) ?? null,
 )
 
 // Previous/next article in the loaded list, for the mobile bottom nav bar.
 const neighbors = computed(() => {
   const list = items.state.items
-  const idx = list.findIndex((i) => i.id === selection.state.itemId)
+  const idx = list.findIndex((i) => i.id === nav.state.itemId)
   if (idx === -1) return { prev: null, next: null }
   return {
     prev: idx > 0 ? list[idx - 1] : null,
@@ -115,7 +113,7 @@ const contentMsg = computed(() => {
 })
 
 async function toggleRead() {
-  const id = selection.state.itemId
+  const id = nav.state.itemId
   if (id == null) return
   try {
     await items.toggleRead(id)
@@ -125,7 +123,7 @@ async function toggleRead() {
 }
 
 async function toggleStar() {
-  const id = selection.state.itemId
+  const id = nav.state.itemId
   if (id == null) return
   try {
     await items.toggleStar(id)

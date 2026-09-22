@@ -1,5 +1,4 @@
-import { inject, reactive, readonly, provide, type DeepReadonly } from 'vue'
-import { feedsTreeKey } from './keys'
+import { reactive, readonly, type DeepReadonly } from 'vue'
 import { api } from '../api/endpoints'
 import type { Feed, Folder, RefreshResult } from '../types/models'
 
@@ -76,7 +75,7 @@ export interface FeedsTreeState {
   refresh: RefreshState
 }
 
-export interface FeedsTreeProvider {
+export interface FeedsStore {
   state: DeepReadonly<FeedsTreeState>
   reload: () => Promise<void>
   /** Adjust a feed's unread count by delta (e.g. an item marked read/unread) and rebuild derived badges. */
@@ -97,7 +96,7 @@ export interface FeedsTreeProvider {
   exportOpmlText: () => Promise<string>
 }
 
-export function createFeedsTreeProvider(): FeedsTreeProvider {
+export function createFeedsStore(): FeedsStore {
   const raw = reactive<FeedsTreeState>({
     feeds: [],
     folders: [],
@@ -224,18 +223,6 @@ export function createFeedsTreeProvider(): FeedsTreeProvider {
   }
 }
 
-export function provideFeedsTree(): FeedsTreeProvider {
-  const p = createFeedsTreeProvider()
-  provide(feedsTreeKey, p)
-  return p
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-export function injectFeedsTree(): FeedsTreeProvider {
-  const p = inject<FeedsTreeProvider>(feedsTreeKey)
-  if (!p) throw new Error('feedsTree provider not provided')
-  return p
 }

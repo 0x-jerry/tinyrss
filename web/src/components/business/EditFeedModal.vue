@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { injectFeedsTree } from '../../providers/feedsTree'
+import { useStore } from '../../store'
 import { useApiToast } from '../../api/useApiToast'
 import { api } from '../../api/endpoints'
 import { useLoading } from '../../composables/useLoading'
@@ -16,7 +16,7 @@ const props = defineProps<EditFeedModalProps>()
 
 const open = defineModel<boolean>({ default: false })
 
-const feeds = injectFeedsTree()
+const { feeds } = useStore()
 const toast = useApiToast()
 
 const title = ref('')

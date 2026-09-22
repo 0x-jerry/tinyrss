@@ -1,6 +1,5 @@
-import { inject, reactive, readonly, provide } from 'vue'
-import { authKey } from './keys'
-import { configureAuth, ApiError } from '../api/client'
+import { reactive, readonly } from 'vue'
+import { ApiError } from '../api/client'
 import { api } from '../api/endpoints'
 
 const STORAGE = 'tinyrss.token'
@@ -27,26 +26,27 @@ export interface AuthState {
   isAuthenticated: boolean
 }
 
-export interface AuthProvider {
+export interface AuthStore {
   state: Readonly<AuthState>
   login: (token: string) => void
   logout: () => void
   /** True when the app may proceed: auth disabled server-side, or a token is set. */
   probe: () => Promise<boolean>
+  /** Set the logout redirect (App wires it to /login); also fired on 401. */
+  setLogoutHandler: (fn: () => void) => void
 }
 
-export interface AuthOptions {
-  /** Called after a logout (user or 401-triggered) so the shell can navigate. */
-  onLogout?: () => void
-}
-
-// Module-scoped singleton so the router guard can read auth state before any component renders.
+// Module-scoped singleton so the router guard can read auth state before any
+// component renders, independent of the rest of the store.
 const state = reactive<AuthState>({ token: readStored(), isAuthenticated: readStored() !== '' })
 
 let onLogout: (() => void) | null = null
 
-const provider: AuthProvider = {
+export const authStore: AuthStore = {
   state: readonly(state),
+  setLogoutHandler: (fn) => {
+    onLogout = fn
+  },
   login: (token) => {
     state.token = token
     state.isAuthenticated = true
@@ -75,26 +75,12 @@ const provider: AuthProvider = {
   },
 }
 
-export function provideAuth(options?: AuthOptions): AuthProvider {
-  onLogout = options?.onLogout ?? null
-  configureAuth({
-    getToken: () => state.token || null,
-    onUnauthorized: () => provider.logout(),
-  })
-  provide(authKey, provider)
-  return provider
-}
-
-export function injectAuth(): AuthProvider {
-  const p = inject<AuthProvider>(authKey)
-  if (!p) throw new Error('auth provider not provided')
-  return p
-}
-
 export function isAuthenticated(): boolean {
   return state.isAuthenticated
 }
 
+// Returns the raw reactive state (not the readonly wrapper) so the router guard
+// and tests can read and toggle it directly.
 export function getAuthState(): Readonly<AuthState> {
   return state
 }

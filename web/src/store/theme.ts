@@ -1,5 +1,4 @@
-import { inject, reactive, readonly, provide } from 'vue'
-import { themeKey } from './keys'
+import { reactive, readonly } from 'vue'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type ResolvedTheme = 'light' | 'dark'
@@ -47,13 +46,13 @@ export interface ThemeState {
   resolved: ResolvedTheme
 }
 
-export interface ThemeProvider {
+export interface ThemeStore {
   state: Readonly<ThemeState>
   setMode: (mode: ThemeMode) => void
 }
 
-// Module-scoped singleton so the theme is applied before the first render.
-function createThemeProvider(): ThemeProvider {
+// Call from the store composition so the theme is applied before the first render.
+export function createThemeStore(): ThemeStore {
   const initialMode = readStored()
   const state = reactive<ThemeState>({
     mode: initialMode,
@@ -81,17 +80,4 @@ function createThemeProvider(): ThemeProvider {
       applyResolved(state.resolved)
     },
   }
-}
-
-const provider = createThemeProvider()
-
-export function provideTheme(): ThemeProvider {
-  provide(themeKey, provider)
-  return provider
-}
-
-export function injectTheme(): ThemeProvider {
-  const p = inject<ThemeProvider>(themeKey)
-  if (!p) throw new Error('theme provider not provided')
-  return p
 }

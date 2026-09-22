@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { injectAuth } from '../providers/auth'
+import { useStore } from '../store'
 import { useApiToast } from '../api/useApiToast'
 import LoginForm from '../components/shared/LoginForm.vue'
 
-const auth = injectAuth()
+const { auth } = useStore()
 const router = useRouter()
 const toast = useApiToast()
 const checking = ref(true)

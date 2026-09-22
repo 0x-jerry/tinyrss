@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sanitizeTheme } from '../src/providers/theme'
+import { sanitizeTheme } from '../src/store/theme'
 
 describe('sanitizeTheme', () => {
   it('returns system for empty or undefined input', () => {

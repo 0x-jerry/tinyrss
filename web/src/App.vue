@@ -1,25 +1,17 @@
 <script setup lang="ts">
 import { RouterView, useRouter } from 'vue-router'
-import { provideAuth, provideSelection, provideFeedsTree, provideItems, provideTheme } from './providers'
+import { useStore } from './store'
 import { toastStore } from './api/useApiToast'
 
 const router = useRouter()
 
-provideTheme()
+const { auth } = useStore()
 
 // Bounce to /login whenever a logout happens (user-initiated or a 401 from the
-// api client calls provider.logout). The router guard handles initial nav.
-provideAuth({
-  onLogout: () => {
-    if (router.currentRoute.value.path !== '/login') router.replace('/login')
-  },
+// api client calls auth.logout). The router guard handles initial nav.
+auth.setLogoutHandler(() => {
+  if (router.currentRoute.value.path !== '/login') router.replace('/login')
 })
-
-// Selection persists itself via localStorage; items reloads on scope changes
-// through the selection provider's onScopeChange callback — no observers.
-const selection = provideSelection()
-const feedsTree = provideFeedsTree()
-provideItems({ selection, feedsTree })
 </script>
 
 <template>

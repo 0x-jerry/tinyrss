@@ -2,9 +2,9 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useMediaQuery } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
-import { injectFeedsTree, buildTree } from '../../providers/feedsTree'
-import { injectSelection } from '../../providers/selection'
-import { injectAuth } from '../../providers/auth'
+import { useStore } from '../../store'
+import { buildTree } from '../../store/feeds'
+import { useViewNav } from '../../composables/useViewNav'
 import { useApiToast } from '../../api/useApiToast'
 import { useFeedFolds } from '../../composables/useFeedFolds'
 import { useLoading } from '../../composables/useLoading'
@@ -32,9 +32,8 @@ export interface FeedTreeEmits {
 const props = defineProps<FeedTreeProps>()
 const emit = defineEmits<FeedTreeEmits>()
 
-const feeds = injectFeedsTree()
-const selection = injectSelection()
-const auth = injectAuth()
+const { auth, feeds } = useStore()
+const nav = useViewNav()
 const toast = useApiToast()
 const route = useRoute()
 const router = useRouter()
@@ -92,7 +91,7 @@ const treeRef = ref<HTMLElement | null>(null)
 // inside a collapsed folder has no rendered row, so expand its container first,
 // then scroll once the row is on screen (after the next render).
 function revealActiveFeed() {
-  const feedId = selection.state.feedId
+  const feedId = nav.state.feedId
   if (feedId != null) {
     const feed = feeds.state.feeds.find((f) => f.id === feedId)
     if (feed) {
@@ -160,14 +159,14 @@ async function doDelete() {
   try {
     let cleared = false
     if (target.kind === 'feed') {
-      if (selection.state.feedId === target.id) {
-        selection.selectFeed(null)
+      if (nav.state.feedId === target.id) {
+        nav.selectFeed(null)
         cleared = true
       }
       await feeds.deleteFeed(target.id)
     } else {
-      if (selection.state.folderId === target.id) {
-        selection.selectFolder(null)
+      if (nav.state.folderId === target.id) {
+        nav.clear()
         cleared = true
       }
       await feeds.deleteFolder(target.id)
@@ -183,13 +182,13 @@ async function doDelete() {
   }
 }
 
-function selectFolder(id: number | null) {
-  selection.selectFolder(id)
+function selectAll() {
+  nav.clear()
   emit('openList')
 }
 
 function selectFeed(id: number) {
-  selection.selectFeed(id)
+  nav.selectFeed(id)
   emit('openList')
 }
 
@@ -284,7 +283,7 @@ const refreshPercent = computed(() => {
     </div>
 
     <nav ref="treeRef" class="tree">
-      <div class="row row--inbox" :class="{ active: selection.state.folderId === null && selection.state.feedId === null }" @click="selectFolder(null)">
+      <div class="row row--inbox" :class="{ active: nav.state.folderId === null && nav.state.feedId === null }" @click="selectAll">
         <span aria-hidden="true" class="i-lucide-rss text-[16px]" />
         <span class="row__label">All articles</span>
         <Badge :count="filteredTree.totalUnread" />
@@ -327,7 +326,7 @@ const refreshPercent = computed(() => {
           >
             <div
               class="row row--feed"
-              :class="{ active: selection.state.feedId === feed.id, dragging: draggingFeedId === feed.id }"
+              :class="{ active: nav.state.feedId === feed.id, dragging: draggingFeedId === feed.id }"
               draggable="true"
               @click="selectFeed(feed.id)"
               @dragstart="onDragStart(feed)"
@@ -370,7 +369,7 @@ const refreshPercent = computed(() => {
           >
             <div
               class="row row--feed"
-              :class="{ active: selection.state.feedId === feed.id, dragging: draggingFeedId === feed.id }"
+              :class="{ active: nav.state.feedId === feed.id, dragging: draggingFeedId === feed.id }"
               draggable="true"
               @click="selectFeed(feed.id)"
               @dragstart="onDragStart(feed)"

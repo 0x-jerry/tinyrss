@@ -1,13 +1,16 @@
-import { readonly, ref, watch } from 'vue'
+import { reactive, readonly, ref, type Ref, watch } from 'vue'
+import { createSharedComposable } from '@vueuse/core'
 import { useRoute, useRouter, type LocationQuery } from 'vue-router'
-import type { SelectionProvider } from '../providers/selection'
 
 export type MobileScreen = 'feeds' | 'list' | 'reader'
 
-export interface ViewState {
+export interface SelectionState {
   folderId: number | null
   feedId: number | null
   itemId: number | null
+}
+
+export interface ViewState extends SelectionState {
   view: MobileScreen
 }
 
@@ -42,27 +45,50 @@ export function toQuery(v: ViewState): LocationQuery {
   return q
 }
 
-// Binds the home route to the selection provider so the browser URL is the
-// source of truth for the current scope/article, giving working back/forward
-// navigation and deep-linkable/shareable views. Scope and mobile-screen changes
-// push a history entry (back returns to the previous scope/screen); item-only
-// changes replace the current entry so paging through articles doesn't flood
-// history.
-export function useViewNav(selection: SelectionProvider) {
+// The view fields this composable owns. Every other query param is carried
+// forward untouched, so an in-progress URL update never drops unrelated state.
+const MANAGED_PARAMS = new Set(['feed', 'folder', 'item', 'view'])
+
+export function mergeQuery(current: LocationQuery, patch: ViewState): LocationQuery {
+  const carried: LocationQuery = {}
+  for (const [k, v] of Object.entries(current)) {
+    if (!MANAGED_PARAMS.has(k)) carried[k] = v
+  }
+  return { ...carried, ...toQuery(patch) }
+}
+
+export interface ViewNav {
+  state: Readonly<SelectionState>
+  screen: Readonly<Ref<MobileScreen>>
+  selectFeed: (id: number | null) => void
+  selectItem: (id: number | null) => void
+  clear: () => void
+  /** Subscribe to feed/folder scope changes (item-only changes do not fire). */
+  onScopeChange: (fn: () => void) => void
+  push: (patch: Partial<ViewState>) => void
+  replace: (patch: Partial<ViewState>) => void
+  back: (fallback: Partial<ViewState>) => void
+}
+
+// The browser URL is the single source of truth for the current scope/article
+// and the mobile screen, giving working back/forward navigation and deep-linkable,
+// shareable views. Scope and mobile-screen changes push a history entry (back
+// returns to the previous scope/screen); item-only changes replace the current
+// entry so paging through articles doesn't flood history. Shared across the
+// store and every pane so selection reads/writes converge on one instance.
+export const useViewNav = createSharedComposable((): ViewNav => {
   const route = useRoute()
   const router = useRouter()
 
-  // First load with an empty URL means "restore the persisted view" from
-  // localStorage, so don't wipe the seed. Only steer the selection when the URL
-  // actually carries a scope or item (a deep link).
-  let isFirstLoad = true
+  const state = reactive<SelectionState>({ folderId: null, feedId: null, itemId: null })
+  let onScope: (() => void) | null = null
 
   // ?add_feed is a transient subscribe-entry parameter handled by FeedTree when
   // it mounts (it opens the dialog pre-filled, then clears the param). While it
   // is present the URL-nav layer stands aside: it must not rewrite the URL (and
   // drop add_feed) nor apply selection from a URL that has no scope yet. The two
-  // watchers stay idempotent — A only mutates selection to match the URL, and B
-  // always writes back the exact current selection — so they converge to a fixed
+  // watchers stay idempotent — A only mutates state to match the URL, and B
+  // always writes back the exact current state — so they converge to a fixed
   // point rather than looping.
   const hasAddFeed = () => route.query.add_feed != null
 
@@ -83,43 +109,38 @@ export function useViewNav(selection: SelectionProvider) {
   const screen = ref<MobileScreen>(parseView(route.query).view)
 
   function buildQuery(patch: Partial<ViewState> = {}): LocationQuery {
-    return toQuery({
-      feedId: selection.state.feedId,
-      folderId: selection.state.folderId,
-      itemId: selection.state.itemId,
+    return mergeQuery(route.query, {
+      feedId: state.feedId,
+      folderId: state.folderId,
+      itemId: state.itemId,
       view: screen.value,
       ...patch,
     })
   }
 
-  // URL -> selection, and keep the local screen in step with the URL's view
-  // (external navigation: back/forward, deep links).
+  // URL -> state, and keep the local screen in step with the URL's view
+  // (external navigation: back/forward, deep links). Scope change is detected
+  // against the current state so an already-applied scope (e.g. one just pushed
+  // by a handler) doesn't reload the item list a second time.
   watch(
     () => route.query,
     (q) => {
       if (hasAddFeed()) return
       const v = parseView(q)
       screen.value = v.view
-      if (isFirstLoad) {
-        isFirstLoad = false
-        if (v.feedId == null && v.folderId == null && v.itemId == null) return
-      }
-      const cur = selection.state
-      if (v.feedId !== cur.feedId || v.folderId !== cur.folderId) {
-        if (v.feedId != null) selection.selectFeed(v.feedId)
-        else if (v.folderId != null) selection.selectFolder(v.folderId)
-        else selection.clear()
-      }
-      if (v.itemId !== cur.itemId) selection.selectItem(v.itemId)
+      const scopeChanged = v.feedId !== state.feedId || v.folderId !== state.folderId
+      state.folderId = v.folderId
+      state.feedId = v.feedId
+      state.itemId = v.itemId
+      if (scopeChanged) onScope?.()
     },
     { immediate: true },
   )
 
-  // Selection -> URL for item changes (j/k, reader prev/next) and for selection
-  // restored from localStorage on first load. We don't push here, so paging
-  // through articles replaces the current entry instead of growing history.
+  // Item -> URL (j/k, reader prev/next). We don't push here, so paging through
+  // articles replaces the current entry instead of growing history.
   watch(
-    () => selection.state.itemId,
+    () => state.itemId,
     (id) => {
       if (hasAddFeed() || navPending) return
       router.replace({ query: buildQuery({ itemId: id }) })
@@ -127,15 +148,20 @@ export function useViewNav(selection: SelectionProvider) {
     { immediate: true },
   )
 
+  function commit(next: Partial<SelectionState>, scopeChanged: boolean) {
+    Object.assign(state, next)
+    if (scopeChanged) onScope?.()
+  }
+
   function push(patch: Partial<ViewState>) {
     if (patch.view != null) screen.value = patch.view
     navPending = true
-    return router.push({ query: buildQuery(patch) })
+    router.push({ query: buildQuery(patch) })
   }
   function replace(patch: Partial<ViewState>) {
     if (patch.view != null) screen.value = patch.view
     navPending = true
-    return router.replace({ query: buildQuery(patch) })
+    router.replace({ query: buildQuery(patch) })
   }
   // Backing out of a pane pops browser history so "back" from the returned pane
   // goes to the previous scope rather than forward into the closed pane. When
@@ -152,5 +178,17 @@ export function useViewNav(selection: SelectionProvider) {
     }
   }
 
-  return { screen: readonly(screen), push, replace, back }
-}
+  return {
+    state: readonly(state),
+    screen: readonly(screen),
+    selectFeed: (id) => commit({ feedId: id, folderId: null }, true),
+    selectItem: (id) => commit({ itemId: id }, false),
+    clear: () => commit({ folderId: null, feedId: null, itemId: null }, true),
+    onScopeChange: (fn) => {
+      onScope = fn
+    },
+    push,
+    replace,
+    back,
+  }
+})

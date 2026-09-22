@@ -65,7 +65,7 @@ vi.mock('../src/views/FeedLayout.vue', () => ({ default: { name: 'FeedLayoutStub
 vi.mock('../src/views/NotFoundView.vue', () => ({ default: { name: 'NotFoundViewStub' } }))
 
 import { router } from '../src/router'
-import { getAuthState } from '../src/providers/auth'
+import { getAuthState } from '../src/store/auth'
 
 beforeEach(() => {
   // The router guard bounces unauthenticated users to /login; mark us

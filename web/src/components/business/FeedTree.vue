@@ -183,14 +183,18 @@ function onDragOver(target: number | null) {
   dropTarget.value = { folderId: target }
 }
 
-function onDrop(target: number | null) {
+async function onDrop(target: number | null) {
   dropTarget.value = null
   const id = draggingFeedId.value
   draggingFeedId.value = null
   if (id == null) return
   const feed = feeds.state.feeds.find((f) => f.id === id)
   if (!feed || feed.folder_id === target) return
-  feeds.moveFeed(id, target).catch((e) => toast.fromError(e))
+  try {
+    await feeds.moveFeed(id, target)
+  } catch (e) {
+    toast.fromError(e)
+  }
 }
 
 function folderIcon(id: number): string {

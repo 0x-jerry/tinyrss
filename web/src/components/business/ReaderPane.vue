@@ -107,22 +107,34 @@ const contentMsg = computed(() => {
   return 'No content for this article.'
 })
 
-function toggleRead() {
+async function toggleRead() {
   const id = selection.state.itemId
   if (id == null) return
-  items.toggleRead(id).catch((e) => toast.fromError(e))
+  try {
+    await items.toggleRead(id)
+  } catch (e) {
+    toast.fromError(e)
+  }
 }
 
-function toggleStar() {
+async function toggleStar() {
   const id = selection.state.itemId
   if (id == null) return
-  items.toggleStar(id).catch((e) => toast.fromError(e))
+  try {
+    await items.toggleStar(id)
+  } catch (e) {
+    toast.fromError(e)
+  }
 }
 
-function onModeChange(e: Event) {
+async function onModeChange(e: Event) {
   const mode = Number((e.target as HTMLSelectElement).value)
   if (!detail.value || !feed.value) return
-  feedsTree.setRenderMode(feed.value.id, mode).catch((err) => toast.fromError(err))
+  try {
+    await feedsTree.setRenderMode(feed.value.id, mode)
+  } catch (err) {
+    toast.fromError(err)
+  }
 }
 
 function openUrl() {

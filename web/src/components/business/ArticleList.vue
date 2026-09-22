@@ -60,12 +60,12 @@ watch([() => props.active, () => selection.state.itemId], () => {
   if (props.active) scrollToActive()
 })
 
-useIntersectionObserver(loadTrigger, ([entry]) => {
-  if (entry.isIntersecting) items.nextPage().catch(() => {})
+useIntersectionObserver(loadTrigger, async ([entry]) => {
+  if (entry.isIntersecting) await items.nextPage()
 })
 
-function select(item: Item) {
-  items.openItem(item.id).catch(() => {})
+async function select(item: Item) {
+  await items.openItem(item.id)
   emit('openReader')
 }
 
@@ -85,8 +85,12 @@ async function runSearch() {
   }
 }
 
-function toggleStar(item: Item) {
-  items.toggleStar(item.id).catch((e) => toast.fromError(e))
+async function toggleStar(item: Item) {
+  try {
+    await items.toggleStar(item.id)
+  } catch (e) {
+    toast.fromError(e)
+  }
 }
 
 const markAllRead = useLoading(async () => {

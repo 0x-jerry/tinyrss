@@ -35,11 +35,15 @@ onMounted(async () => {
     // kept in the selection, localStorage, or URL and re-fetched on every load.
     const itemId = selection.state.itemId
     if (itemId != null && (!isMobile.value || nav.screen.value === 'reader')) {
-      await items.openItem(itemId).catch(() => selection.selectItem(null))
+      try {
+        await items.openItem(itemId)
+      } catch {
+        selection.selectItem(null)
+      }
     }
     // Resume a refresh-all that was already running when this page loaded, so
     // its progress bar shows and the tree resyncs when it finishes.
-    await feeds.resumeRefresh().catch(() => {})
+    await feeds.resumeRefresh()
   } catch (e) {
     toast.fromError(e)
   }
@@ -96,10 +100,10 @@ function closeFeeds() {
   nav.back({ view: 'list' })
 }
 
-function toggleRead() {
+async function toggleRead() {
   const id = selection.state.itemId
   if (id == null) return
-  items.toggleRead(id).catch(() => {})
+  await items.toggleRead(id)
 }
 
 onKeyStroke('j', () => move(1))
@@ -107,8 +111,8 @@ onKeyStroke('k', () => move(-1))
 onKeyStroke('m', toggleRead)
 useIntervalFn(
   () => {
-    feeds.reload().catch(() => {})
-    items.load().catch(() => {})
+    feeds.reload()
+    items.load()
   },
   60_000,
   { immediate: false },

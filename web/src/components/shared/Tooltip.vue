@@ -26,18 +26,17 @@ const anchor = computed(() => {
   return (wrap?.firstElementChild as HTMLElement | null) ?? wrap ?? null
 })
 
-function updatePosition() {
+async function updatePosition() {
   const el = anchor.value
   const bubble = bubbleRef.value
   if (!el || !bubble) return
-  return computePosition(el, bubble, {
+  const { x, y } = await computePosition(el, bubble, {
     strategy: 'fixed',
     placement: props.placement,
     middleware: [offset(8), flip(), shift({ padding: 8 })],
-  }).then(({ x, y }) => {
-    bubble.style.left = `${x}px`
-    bubble.style.top = `${y}px`
   })
+  bubble.style.left = `${x}px`
+  bubble.style.top = `${y}px`
 }
 
 function show() {

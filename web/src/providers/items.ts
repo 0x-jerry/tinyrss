@@ -231,7 +231,7 @@ export function provideItems(deps: {
   })
   // Reload the list whenever the feed/folder scope changes. No observer: the
   // selection provider invokes this from its scope-changing mutators.
-  deps.selection.onScopeChange(() => provider.load().catch(() => {}))
+  deps.selection.onScopeChange(() => provider.load())
   provide(itemsKey, provider)
   return provider
 }

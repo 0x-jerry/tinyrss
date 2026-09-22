@@ -154,9 +154,11 @@ async function onImportFile(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
-  importFile(file).finally(() => {
+  try {
+    await importFile(file)
+  } finally {
     input.value = ''
-  })
+  }
 }
 
 const importFile = useLoading(async (file: File) => {

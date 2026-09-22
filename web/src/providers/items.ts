@@ -190,6 +190,8 @@ export function createItemsProvider(deps: ItemsDeps): ItemsProvider {
       deps.selectItem?.(id)
       const detail = await api.getItem(id)
       raw.selectedItem = detail
+
+      if (detail.is_read) return
       patch(id, { is_read: true })
       deps.adjustUnread?.(detail.feed_id, -1)
       await api.setItemState(id, 'read')

@@ -229,6 +229,19 @@ describe('items provider', () => {
     expect(adjustUnread).toHaveBeenCalledWith(1, -1)
   })
 
+  it('openItem skips unread updates when the item is already read', async () => {
+    const actions: string[] = []
+    vi.mocked(api.setItemState).mockImplementation(async (_id: number, action: string) => {
+      actions.push(action)
+    })
+    vi.mocked(api.getItem).mockResolvedValue({ ...item(1), is_read: true, summary: '', content: '' })
+    const p = createItemsProvider({ getSelection: () => selection, onItemsChanged, adjustUnread })
+    await p.load()
+    await p.openItem(p.state.items[0].id)
+    expect(adjustUnread).not.toHaveBeenCalled()
+    expect(actions).toEqual([])
+  })
+
   it('toggleStar flips star state via the api', async () => {
     const actions: string[] = []
     vi.mocked(api.setItemState).mockImplementation(async (_id: number, action: string) => {

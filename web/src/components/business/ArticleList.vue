@@ -107,11 +107,6 @@ const markAllRead = useLoading(async () => {
   }
 })
 
-// Refresh button is shown for a specific feed or the "all articles" scope.
-// Folder scope has no dedicated refresh, so it is excluded.
-const showRefresh = computed(
-  () => nav.state.feedId != null || (nav.state.feedId == null && nav.state.folderId == null),
-)
 const refreshTitle = computed(() => (nav.state.feedId != null ? 'Refresh feed' : 'Refresh all articles'))
 
 const refresh = useLoading(async () => {
@@ -183,7 +178,6 @@ function dateLabel(iso: string): string {
           </button>
         </div>
         <Button
-          v-if="showRefresh"
           variant="ghost"
           size="sm"
           :disabled="refreshBusy"

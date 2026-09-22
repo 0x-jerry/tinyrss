@@ -53,9 +53,8 @@ onMounted(async () => {
 // so the selected feed/folder and the open screen both become shareable links.
 async function openScopeList() {
   const feedId = nav.state.feedId
-  const folderId = nav.state.folderId
-  const scope: Partial<ViewState> = { feedId, folderId, itemId: null }
-  if (isMobile.value && (feedId != null || folderId != null)) {
+  const scope: Partial<ViewState> = { feedId, itemId: null }
+  if (isMobile.value && feedId != null) {
     // Selecting a scope on mobile moves through the feeds screen first: replace
     // the current feeds entry with the chosen feed/folder so it survives as the
     // previous entry (back from the list returns to feeds), then push the list.

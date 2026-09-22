@@ -5,7 +5,6 @@ import { useRoute, useRouter, type LocationQuery } from 'vue-router'
 export type MobileScreen = 'feeds' | 'list' | 'reader'
 
 export interface SelectionState {
-  folderId: number | null
   feedId: number | null
   itemId: number | null
 }
@@ -31,13 +30,12 @@ function num(v: unknown): number | null {
 export function parseView(raw: Record<string, unknown> = {}): ViewState {
   const view: MobileScreen =
     typeof raw.view === 'string' && VIEWS.includes(raw.view) ? (raw.view as MobileScreen) : DEFAULT_VIEW
-  return { folderId: num(raw.folder), feedId: num(raw.feed), itemId: num(raw.item), view }
+  return { feedId: num(raw.feed), itemId: num(raw.item), view }
 }
 
 export function toQuery(v: ViewState): LocationQuery {
   const q: LocationQuery = {}
   if (v.feedId != null) q.feed = String(v.feedId)
-  if (v.folderId != null) q.folder = String(v.folderId)
   if (v.itemId != null) q.item = String(v.itemId)
   // Always write view, including the default, so the current mobile screen is
   // explicit in the URL (and hence in history / shared links).
@@ -47,7 +45,7 @@ export function toQuery(v: ViewState): LocationQuery {
 
 // The view fields this composable owns. Every other query param is carried
 // forward untouched, so an in-progress URL update never drops unrelated state.
-const MANAGED_PARAMS = new Set(['feed', 'folder', 'item', 'view'])
+const MANAGED_PARAMS = new Set(['feed', 'item', 'view'])
 
 export function mergeQuery(current: LocationQuery, patch: ViewState): LocationQuery {
   const carried: LocationQuery = {}
@@ -63,7 +61,7 @@ export interface ViewNav {
   selectFeed: (id: number | null) => void
   selectItem: (id: number | null) => void
   clear: () => void
-  /** Subscribe to feed/folder scope changes (item-only changes do not fire). */
+  /** Subscribe to feed scope changes (item-only changes do not fire). */
   onScopeChange: (fn: () => void) => void
   push: (patch: Partial<ViewState>) => void
   replace: (patch: Partial<ViewState>) => void
@@ -80,7 +78,7 @@ export const useViewNav = createSharedComposable((): ViewNav => {
   const route = useRoute()
   const router = useRouter()
 
-  const state = reactive<SelectionState>({ folderId: null, feedId: null, itemId: null })
+  const state = reactive<SelectionState>({ feedId: null, itemId: null })
   let onScope: (() => void) | null = null
 
   // ?add_feed is a transient subscribe-entry parameter handled by FeedTree when
@@ -111,7 +109,6 @@ export const useViewNav = createSharedComposable((): ViewNav => {
   function buildQuery(patch: Partial<ViewState> = {}): LocationQuery {
     return mergeQuery(route.query, {
       feedId: state.feedId,
-      folderId: state.folderId,
       itemId: state.itemId,
       view: screen.value,
       ...patch,
@@ -128,8 +125,7 @@ export const useViewNav = createSharedComposable((): ViewNav => {
       if (hasAddFeed()) return
       const v = parseView(q)
       screen.value = v.view
-      const scopeChanged = v.feedId !== state.feedId || v.folderId !== state.folderId
-      state.folderId = v.folderId
+      const scopeChanged = v.feedId !== state.feedId
       state.feedId = v.feedId
       state.itemId = v.itemId
       if (scopeChanged) onScope?.()
@@ -181,9 +177,9 @@ export const useViewNav = createSharedComposable((): ViewNav => {
   return {
     state: readonly(state),
     screen: readonly(screen),
-    selectFeed: (id) => commit({ feedId: id, folderId: null }, true),
+    selectFeed: (id) => commit({ feedId: id }, true),
     selectItem: (id) => commit({ itemId: id }, false),
-    clear: () => commit({ folderId: null, feedId: null, itemId: null }, true),
+    clear: () => commit({ feedId: null, itemId: null }, true),
     onScopeChange: (fn) => {
       onScope = fn
     },

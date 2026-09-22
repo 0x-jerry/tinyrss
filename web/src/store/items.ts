@@ -8,11 +8,10 @@ export type Filter = 'all' | 'unread' | 'starred'
 const FILTERS: readonly Filter[] = ['all', 'unread', 'starred']
 const SCOPE_FILTERS_KEY = 'tinyrss.scopeFilters'
 
-export type ScopeKey = 'all' | `folder:${number}` | `feed:${number}`
+export type ScopeKey = 'all' | `feed:${number}`
 
-export function scopeKeyOf(selection: { feedId: number | null; folderId: number | null }): ScopeKey {
+export function scopeKeyOf(selection: { feedId: number | null }): ScopeKey {
   if (selection.feedId != null) return `feed:${selection.feedId}`
-  if (selection.folderId != null) return `folder:${selection.folderId}`
   return 'all'
 }
 
@@ -47,7 +46,7 @@ export interface ItemsState {
 }
 
 export interface ItemsDeps {
-  getSelection: () => { feedId: number | null; folderId: number | null }
+  getSelection: () => { feedId: number | null }
   selectItem?: (id: number) => void
   onItemsChanged?: () => void
   /** Apply a ±1 unread-count change to the tree badge for the item's feed. */
@@ -71,7 +70,7 @@ export interface ItemsStore {
 }
 
 export function buildItemQuery(
-  selection: { feedId: number | null; folderId: number | null },
+  selection: { feedId: number | null },
   filter: Filter,
   search: string,
   page: number,
@@ -79,7 +78,6 @@ export function buildItemQuery(
 ): string {
   const p = new URLSearchParams()
   if (selection.feedId != null) p.set('feed_id', String(selection.feedId))
-  else if (selection.folderId != null) p.set('folder_id', String(selection.folderId))
   if (filter === 'unread') p.set('unread', 'true')
   if (filter === 'starred') p.set('starred', 'true')
   if (search) p.set('search', search)
@@ -89,7 +87,7 @@ export function buildItemQuery(
 }
 
 export function createItemsStore(deps: ItemsDeps): ItemsStore {
-  // Each feed/folder (and "all articles") remembers its own filter.
+  // Each feed (and "all articles") remembers its own filter.
   const filters = useLocalStorage<Partial<Record<ScopeKey, Filter>>>(SCOPE_FILTERS_KEY, {}, {
     serializer: scopeFiltersSerializer,
   })
@@ -105,7 +103,7 @@ export function createItemsStore(deps: ItemsDeps): ItemsStore {
     limit: 50,
     loading: false,
     // The active filter derives from the current scope's stored preference and is
-    // recomputed on access, so it follows feed/folder changes without an observer.
+    // recomputed on access, so it follows feed changes without an observer.
     get filter() {
       const f = filters.value[currentScope()]
       return f && FILTERS.includes(f) ? f : 'unread'
@@ -208,7 +206,7 @@ export function createItemsStore(deps: ItemsDeps): ItemsStore {
     star: (id) => setItemStarred(id, true),
     unstar: (id) => setItemStarred(id, false),
     markAllRead: async () => {
-      await api.readAll(deps.getSelection().feedId, deps.getSelection().folderId)
+      await api.readAll(deps.getSelection().feedId)
       raw.items.forEach((i) => (i.is_read = true))
       notify()
     },

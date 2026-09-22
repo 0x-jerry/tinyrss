@@ -31,19 +31,13 @@ const pageResponse = (query: string): ItemsResponse => {
 }
 
 describe('buildItemQuery', () => {
-  it('prefers feed_id over folder_id', () => {
-    const q = buildItemQuery({ feedId: 5, folderId: 3 }, 'all', '', 1, 50)
-    expect(q).toContain('feed_id=5')
-    expect(q).not.toContain('folder_id')
-  })
-
-  it('uses folder_id when no feed is selected', () => {
-    const q = buildItemQuery({ feedId: null, folderId: 3 }, 'all', '', 1, 50)
-    expect(q).toContain('folder_id=3')
+  it('adds feed_id when a feed is selected and omits it otherwise', () => {
+    expect(buildItemQuery({ feedId: 5 }, 'all', '', 1, 50)).toContain('feed_id=5')
+    expect(buildItemQuery({ feedId: null }, 'all', '', 1, 50)).not.toContain('feed_id')
   })
 
   it('renders filter, search, pagination and limits', () => {
-    const q = buildItemQuery({ feedId: null, folderId: null }, 'unread', 'hello', 2, 50)
+    const q = buildItemQuery({ feedId: null }, 'unread', 'hello', 2, 50)
     expect(q).toContain('unread=true')
     expect(q).toContain('search=hello')
     expect(q).toContain('page=2')
@@ -52,7 +46,7 @@ describe('buildItemQuery', () => {
 })
 
 describe('items provider', () => {
-  const selection = { feedId: null, folderId: null }
+  const selection = { feedId: null }
   let calls: string[]
   let onItemsChanged: ReturnType<typeof vi.fn>
   let adjustUnread: ReturnType<typeof vi.fn>
@@ -82,7 +76,6 @@ describe('items provider', () => {
     expect(p.state.total).toBe(150)
     expect(calls[0]).toContain('page=1')
     expect(calls[0]).not.toContain('feed_id')
-    expect(calls[0]).not.toContain('folder_id')
   })
 
   it('appends the next page and advances pagination', async () => {
@@ -118,7 +111,7 @@ describe('items provider', () => {
   })
 
   it('honors a filter remembered per feed scope', async () => {
-    const sel = { feedId: null as number | null, folderId: null as number | null }
+    const sel = { feedId: null as number | null }
     const queries: string[] = []
     vi.mocked(api.listItems).mockImplementation(async (query: string) => {
       queries.push(query)
@@ -140,10 +133,9 @@ describe('items provider', () => {
     expect(queries[queries.length - 1]).toContain('starred=true')
   })
 
-  it('keys the scope by feed, then folder, then all articles', () => {
-    expect(scopeKeyOf({ feedId: 7, folderId: 3 })).toBe('feed:7')
-    expect(scopeKeyOf({ feedId: null, folderId: 3 })).toBe('folder:3')
-    expect(scopeKeyOf({ feedId: null, folderId: null })).toBe('all')
+  it('keys the scope by feed, then all articles', () => {
+    expect(scopeKeyOf({ feedId: 7 })).toBe('feed:7')
+    expect(scopeKeyOf({ feedId: null })).toBe('all')
   })
 
   it('parses scope filters, dropping malformed entries', () => {
@@ -196,7 +188,7 @@ describe('items provider', () => {
   })
 
   it('marks all read for the current selection', async () => {
-    selection.folderId = 4
+    selection.feedId = 4
     const p = provider()
     await p.load()
     await p.markAllRead()

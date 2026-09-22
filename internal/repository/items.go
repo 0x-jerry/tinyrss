@@ -122,10 +122,6 @@ func itemWhere(filter ItemFilter, search string) (string, []any) {
 		conds = append(conds, "it.feed_id = ?")
 		args = append(args, filter.FeedID)
 	}
-	if filter.FolderID > 0 {
-		conds = append(conds, "f.folder_id = ?")
-		args = append(args, filter.FolderID)
-	}
 	if filter.Unread {
 		conds = append(conds, "it.is_read = 0")
 	}

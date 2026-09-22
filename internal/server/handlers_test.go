@@ -325,7 +325,7 @@ func TestStatsAndReadAll(t *testing.T) {
 		t.Fatalf("stats = %s", body)
 	}
 
-	resp, body = do(t, ts, "POST", "/api/items/read-all?folder_id="+itoa(folder.ID), token, nil)
+	resp, body = do(t, ts, "POST", "/api/items/read-all?feed_id="+itoa(feed.ID), token, nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("read-all: %d %s", resp.StatusCode, body)
 	}

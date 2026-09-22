@@ -105,7 +105,7 @@ func TestRepoCRUDDedupUnread(t *testing.T) {
 		t.Fatalf("unread after read = %d, want 1", feed.Unread)
 	}
 
-	count, err := repo.MarkAllRead(ItemFilter{FolderID: folder.ID})
+	count, err := repo.MarkAllRead(ItemFilter{FeedID: feed.ID})
 	if err != nil || count != 2 {
 		t.Fatalf("mark-all-read: count=%d err=%v", count, err)
 	}

@@ -165,15 +165,11 @@ async function doDelete() {
       }
       await feeds.deleteFeed(target.id)
     } else {
-      if (nav.state.folderId === target.id) {
-        nav.clear()
-        cleared = true
-      }
       await feeds.deleteFolder(target.id)
     }
     toast.success(target.kind === 'feed' ? 'Feed deleted' : 'Folder deleted')
     pendingDelete.value = null
-    // The selected feed/folder no longer exists: point the URL back at the
+    // The selected feed no longer exists: point the URL back at the
     // All-articles scope instead of a now-invalid id.
     if (cleared) emit('openList')
   } catch (e) {
@@ -283,7 +279,7 @@ const refreshPercent = computed(() => {
     </div>
 
     <nav ref="treeRef" class="tree">
-      <div class="row row--inbox" :class="{ active: nav.state.folderId === null && nav.state.feedId === null }" @click="selectAll">
+      <div class="row row--inbox" :class="{ active: nav.state.feedId === null }" @click="selectAll">
         <span aria-hidden="true" class="i-lucide-rss text-[16px]" />
         <span class="row__label">All articles</span>
         <Badge :count="filteredTree.totalUnread" />

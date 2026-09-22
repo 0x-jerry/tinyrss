@@ -17,12 +17,12 @@ export const useStore = createGlobalState(() => {
   const feeds = createFeedsStore()
 
   const items = createItemsStore({
-    getSelection: () => ({ feedId: nav.state.feedId, folderId: nav.state.folderId }),
+    getSelection: () => ({ feedId: nav.state.feedId }),
     selectItem: nav.selectItem,
     onItemsChanged: () => feeds.reload(),
     adjustUnread: (feedId, delta) => feeds.adjustUnread(feedId, delta),
   })
-  // Reload the list whenever the feed/folder scope changes. No observer: the
+  // Reload the list whenever the feed scope changes. No observer: the
   // nav composable invokes this from its scope-changing mutators.
   nav.onScopeChange(() => items.load())
 

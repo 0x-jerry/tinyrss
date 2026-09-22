@@ -290,13 +290,12 @@ func (s *Server) handleDeleteFolder(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListItems(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	filter := repository.ItemFilter{
-		FeedID:   atoiDefault(q.Get("feed_id"), 0),
-		FolderID: atoiDefault(q.Get("folder_id"), 0),
-		Unread:   truthy(q.Get("unread")),
-		Starred:  truthy(q.Get("starred")),
-		Search:   q.Get("search"),
-		Page:     atoiDefault(q.Get("page"), 1),
-		Limit:    atoiDefault(q.Get("limit"), 50),
+		FeedID:  atoiDefault(q.Get("feed_id"), 0),
+		Unread:  truthy(q.Get("unread")),
+		Starred: truthy(q.Get("starred")),
+		Search:  q.Get("search"),
+		Page:    atoiDefault(q.Get("page"), 1),
+		Limit:   atoiDefault(q.Get("limit"), 50),
 	}
 	items, total, err := s.repo.ListItems(filter)
 	if err != nil {
@@ -348,8 +347,7 @@ func (s *Server) handleMarkItem(kind string, value bool) http.HandlerFunc {
 func (s *Server) handleReadAll(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	filter := repository.ItemFilter{
-		FeedID:   atoiDefault(q.Get("feed_id"), 0),
-		FolderID: atoiDefault(q.Get("folder_id"), 0),
+		FeedID: atoiDefault(q.Get("feed_id"), 0),
 	}
 	count, err := s.repo.MarkAllRead(filter)
 	if err != nil {

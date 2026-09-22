@@ -26,9 +26,8 @@ export interface CreateFeedPatch {
   folder_id?: number | null
 }
 
-function readAllQuery(feedId: number | null, folderId: number | null): string {
+function readAllQuery(feedId: number | null): string {
   if (feedId != null) return `?feed_id=${feedId}`
-  if (folderId != null) return `?folder_id=${folderId}`
   return ''
 }
 
@@ -57,8 +56,8 @@ export const api = {
   listItems: (query: string) => request<ItemsResponse>('GET', `/api/items?${query}`),
   getItem: (id: number) => request<ItemDetail>('GET', `/api/items/${id}`),
   setItemState: (id: number, action: ItemAction) => request<void>('POST', `/api/items/${id}/${action}`),
-  readAll: (feedId: number | null, folderId: number | null) =>
-    request<ReadAllResult>('POST', `/api/items/read-all${readAllQuery(feedId, folderId)}`),
+  readAll: (feedId: number | null) =>
+    request<ReadAllResult>('POST', `/api/items/read-all${readAllQuery(feedId)}`),
 
   // Render
   renderUrl: (url: string) => requestText('GET', `/api/render?url=${encodeURIComponent(url)}`),

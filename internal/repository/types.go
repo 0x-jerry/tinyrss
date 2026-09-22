@@ -83,11 +83,10 @@ type Item struct {
 
 // ItemFilter describes the article list query. Zero/unset values are ignored.
 type ItemFilter struct {
-	FeedID   int
-	FolderID int
-	Unread   bool
-	Starred  bool
-	Search   string
-	Page     int
-	Limit    int
+	FeedID  int
+	Unread  bool
+	Starred bool
+	Search  string
+	Page    int
+	Limit   int
 }

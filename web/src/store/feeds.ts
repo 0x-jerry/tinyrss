@@ -211,7 +211,7 @@ export function createFeedsStore(): FeedsStore {
       if (feed) feed.render_mode = updated.render_mode
     },
     markAllRead: async () => {
-      await api.readAll(null, null)
+      await api.readAll(null)
       await reload()
     },
     importOpmlForm: async (form) => {

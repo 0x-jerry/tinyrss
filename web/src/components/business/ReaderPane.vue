@@ -7,7 +7,6 @@ import { useViewNav } from '../../composables/useViewNav'
 import { useApiToast } from '../../api/useApiToast'
 import { api } from '../../api/endpoints'
 import { renderKind } from '../../helpers'
-import { useItemNav } from '../../composables/useItemNav'
 import Button from '../shared/Button.vue'
 import EmptyState from '../shared/EmptyState.vue'
 import ReaderContent from './ReaderContent.vue'
@@ -22,7 +21,14 @@ const emit = defineEmits<ReaderPaneEmits>()
 const { items, feeds: feedsTree } = useStore()
 const nav = useViewNav()
 const toast = useApiToast()
-const { move } = useItemNav(items, nav)
+
+async function move(step: number) {
+  const list = items.state.items
+  if (!list.length) return
+  const idx = list.findIndex((i) => i.id === nav.state.itemId)
+  const next = Math.min(Math.max(idx === -1 ? 0 : idx + step, 0), list.length - 1)
+  await items.openItem(list[next].id)
+}
 
 const detail = computed(() => items.state.selectedItem)
 

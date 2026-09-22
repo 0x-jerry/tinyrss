@@ -1,0 +1,229 @@
+diff --git a/web/src/components/business/ArticleList.vue b/web/src/components/business/ArticleList.vue
+index 9698628..e97be4d 100644
+--- a/web/src/components/business/ArticleList.vue
++++ b/web/src/components/business/ArticleList.vue
+@@ -60,12 +60,12 @@ watch([() => props.active, () => selection.state.itemId], () => {
+   if (props.active) scrollToActive()
+ })
+ 
+-useIntersectionObserver(loadTrigger, ([entry]) => {
+-  if (entry.isIntersecting) items.nextPage().catch(() => {})
++useIntersectionObserver(loadTrigger, async ([entry]) => {
++  if (entry.isIntersecting) await items.nextPage()
+ })
+ 
+-function select(item: Item) {
+-  items.openItem(item.id).catch(() => {})
++async function select(item: Item) {
++  await items.openItem(item.id)
+   emit('openReader')
+ }
+ 
+@@ -85,8 +85,12 @@ async function runSearch() {
+   }
+ }
+ 
+-function toggleStar(item: Item) {
+-  items.toggleStar(item.id).catch((e) => toast.fromError(e))
++async function toggleStar(item: Item) {
++  try {
++    await items.toggleStar(item.id)
++  } catch (e) {
++    toast.fromError(e)
++  }
+ }
+ 
+ const markAllRead = useLoading(async () => {
+diff --git a/web/src/components/business/FeedTree.vue b/web/src/components/business/FeedTree.vue
+index f4ea8b5..0066437 100644
+--- a/web/src/components/business/FeedTree.vue
++++ b/web/src/components/business/FeedTree.vue
+@@ -183,14 +183,18 @@ function onDragOver(target: number | null) {
+   dropTarget.value = { folderId: target }
+ }
+ 
+-function onDrop(target: number | null) {
++async function onDrop(target: number | null) {
+   dropTarget.value = null
+   const id = draggingFeedId.value
+   draggingFeedId.value = null
+   if (id == null) return
+   const feed = feeds.state.feeds.find((f) => f.id === id)
+   if (!feed || feed.folder_id === target) return
+-  feeds.moveFeed(id, target).catch((e) => toast.fromError(e))
++  try {
++    await feeds.moveFeed(id, target)
++  } catch (e) {
++    toast.fromError(e)
++  }
+ }
+ 
+ function folderIcon(id: number): string {
+diff --git a/web/src/components/business/ReaderPane.vue b/web/src/components/business/ReaderPane.vue
+index f612b33..4a861fc 100644
+--- a/web/src/components/business/ReaderPane.vue
++++ b/web/src/components/business/ReaderPane.vue
+@@ -107,22 +107,34 @@ const contentMsg = computed(() => {
+   return 'No content for this article.'
+ })
+ 
+-function toggleRead() {
++async function toggleRead() {
+   const id = selection.state.itemId
+   if (id == null) return
+-  items.toggleRead(id).catch((e) => toast.fromError(e))
++  try {
++    await items.toggleRead(id)
++  } catch (e) {
++    toast.fromError(e)
++  }
+ }
+ 
+-function toggleStar() {
++async function toggleStar() {
+   const id = selection.state.itemId
+   if (id == null) return
+-  items.toggleStar(id).catch((e) => toast.fromError(e))
++  try {
++    await items.toggleStar(id)
++  } catch (e) {
++    toast.fromError(e)
++  }
+ }
+ 
+-function onModeChange(e: Event) {
++async function onModeChange(e: Event) {
+   const mode = Number((e.target as HTMLSelectElement).value)
+   if (!detail.value || !feed.value) return
+-  feedsTree.setRenderMode(feed.value.id, mode).catch((err) => toast.fromError(err))
++  try {
++    await feedsTree.setRenderMode(feed.value.id, mode)
++  } catch (err) {
++    toast.fromError(err)
++  }
+ }
+ 
+ function openUrl() {
+diff --git a/web/src/components/business/SettingsModal.vue b/web/src/components/business/SettingsModal.vue
+index 3d81862..9b5558d 100644
+--- a/web/src/components/business/SettingsModal.vue
++++ b/web/src/components/business/SettingsModal.vue
+@@ -154,9 +154,11 @@ async function onImportFile(event: Event) {
+   const input = event.target as HTMLInputElement
+   const file = input.files?.[0]
+   if (!file) return
+-  importFile(file).finally(() => {
++  try {
++    await importFile(file)
++  } finally {
+     input.value = ''
+-  })
++  }
+ }
+ 
+ const importFile = useLoading(async (file: File) => {
+diff --git a/web/src/components/shared/Tooltip.vue b/web/src/components/shared/Tooltip.vue
+index f71f55c..d867096 100644
+--- a/web/src/components/shared/Tooltip.vue
++++ b/web/src/components/shared/Tooltip.vue
+@@ -26,18 +26,17 @@ const anchor = computed(() => {
+   return (wrap?.firstElementChild as HTMLElement | null) ?? wrap ?? null
+ })
+ 
+-function updatePosition() {
++async function updatePosition() {
+   const el = anchor.value
+   const bubble = bubbleRef.value
+   if (!el || !bubble) return
+-  return computePosition(el, bubble, {
++  const { x, y } = await computePosition(el, bubble, {
+     strategy: 'fixed',
+     placement: props.placement,
+     middleware: [offset(8), flip(), shift({ padding: 8 })],
+-  }).then(({ x, y }) => {
+-    bubble.style.left = `${x}px`
+-    bubble.style.top = `${y}px`
+   })
++  bubble.style.left = `${x}px`
++  bubble.style.top = `${y}px`
+ }
+ 
+ function show() {
+diff --git a/web/src/composables/useItemNav.ts b/web/src/composables/useItemNav.ts
+index 23fb06d..36bcd15 100644
+--- a/web/src/composables/useItemNav.ts
++++ b/web/src/composables/useItemNav.ts
+@@ -4,12 +4,12 @@ import type { SelectionProvider } from '../providers/selection'
+ // Shared step navigation over the currently loaded list, backing both the j/k
+ // keyboard shortcuts (FeedLayout) and the reader toolbar's prev/next buttons.
+ export function useItemNav(items: ItemsProvider, selection: SelectionProvider) {
+-  function move(step: number) {
++  async function move(step: number) {
+     const list = items.state.items
+     if (!list.length) return
+     const idx = list.findIndex((i) => i.id === selection.state.itemId)
+     const next = Math.min(Math.max(idx === -1 ? 0 : idx + step, 0), list.length - 1)
+-    items.openItem(list[next].id).catch(() => {})
++    await items.openItem(list[next].id)
+   }
+ 
+   return { move }
+diff --git a/web/src/providers/items.ts b/web/src/providers/items.ts
+index f7db170..42a4303 100644
+--- a/web/src/providers/items.ts
++++ b/web/src/providers/items.ts
+@@ -231,7 +231,7 @@ export function provideItems(deps: {
+   })
+   // Reload the list whenever the feed/folder scope changes. No observer: the
+   // selection provider invokes this from its scope-changing mutators.
+-  deps.selection.onScopeChange(() => provider.load().catch(() => {}))
++  deps.selection.onScopeChange(() => provider.load())
+   provide(itemsKey, provider)
+   return provider
+ }
+diff --git a/web/src/views/FeedLayout.vue b/web/src/views/FeedLayout.vue
+index e647531..b6e0d17 100644
+--- a/web/src/views/FeedLayout.vue
++++ b/web/src/views/FeedLayout.vue
+@@ -35,11 +35,15 @@ onMounted(async () => {
+     // kept in the selection, localStorage, or URL and re-fetched on every load.
+     const itemId = selection.state.itemId
+     if (itemId != null && (!isMobile.value || nav.screen.value === 'reader')) {
+-      await items.openItem(itemId).catch(() => selection.selectItem(null))
++      try {
++        await items.openItem(itemId)
++      } catch {
++        selection.selectItem(null)
++      }
+     }
+     // Resume a refresh-all that was already running when this page loaded, so
+     // its progress bar shows and the tree resyncs when it finishes.
+-    await feeds.resumeRefresh().catch(() => {})
++    await feeds.resumeRefresh()
+   } catch (e) {
+     toast.fromError(e)
+   }
+@@ -96,10 +100,10 @@ function closeFeeds() {
+   nav.back({ view: 'list' })
+ }
+ 
+-function toggleRead() {
++async function toggleRead() {
+   const id = selection.state.itemId
+   if (id == null) return
+-  items.toggleRead(id).catch(() => {})
++  await items.toggleRead(id)
+ }
+ 
+ onKeyStroke('j', () => move(1))
+@@ -107,8 +111,8 @@ onKeyStroke('k', () => move(-1))
+ onKeyStroke('m', toggleRead)
+ useIntervalFn(
+   () => {
+-    feeds.reload().catch(() => {})
+-    items.load().catch(() => {})
++    feeds.reload()
++    items.load()
+   },
+   60_000,
+   { immediate: false },

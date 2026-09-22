@@ -32,20 +32,20 @@ var feedLinkTypes = map[string]bool{
 // when it is itself a feed, otherwise the page's HTML is scanned for a feed
 // link (autodiscovery). It never writes anything — dialogs use it only to
 // prefill the form.
-func (f *Fetcher) Discover(raw string) (*Discovered, error) {
+func (f *Fetcher) Discover(raw, proxyURL string) (*Discovered, error) {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 		return nil, errors.New("url must be http(s)")
 	}
-	if d, err := f.discoverDirect(raw); err == nil {
+	if d, err := f.discoverDirect(raw, proxyURL); err == nil {
 		return d, nil
 	}
-	return f.discoverFromHTML(raw)
+	return f.discoverFromHTML(raw, proxyURL)
 }
 
 // discoverDirect parses raw as RSS/Atom and returns its metadata.
-func (f *Fetcher) discoverDirect(raw string) (*Discovered, error) {
-	pf, err := f.Probe(raw)
+func (f *Fetcher) discoverDirect(raw, proxyURL string) (*Discovered, error) {
+	pf, err := f.Probe(raw, proxyURL)
 	if err != nil {
 		return nil, err
 	}
@@ -59,13 +59,17 @@ func (f *Fetcher) discoverDirect(raw string) (*Discovered, error) {
 
 // discoverFromHTML fetches raw as a web page, collects its feed-link hrefs and
 // probes each candidate until one parses as a feed.
-func (f *Fetcher) discoverFromHTML(raw string) (*Discovered, error) {
+func (f *Fetcher) discoverFromHTML(raw, proxyURL string) (*Discovered, error) {
+	client, err := f.clientFor(proxyURL)
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequest(http.MethodGet, raw, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := f.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +84,7 @@ func (f *Fetcher) discoverFromHTML(raw string) (*Discovered, error) {
 			continue
 		}
 		cand := pageURL.ResolveReference(linkURL).String()
-		pf, err := f.Probe(cand)
+		pf, err := f.Probe(cand, proxyURL)
 		if err != nil {
 			continue
 		}

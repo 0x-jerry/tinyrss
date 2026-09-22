@@ -12,6 +12,7 @@ export interface Feed {
   feed_url: string
   site_url: string
   description: string
+  proxy_url: string // "" = direct connection
   render_mode: number // 0=content, 1=iframe site view
   folder_id: number | null
   etag: string

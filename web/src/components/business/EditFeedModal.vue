@@ -23,6 +23,7 @@ const title = ref('')
 const feedUrl = ref('')
 const siteUrl = ref('')
 const description = ref('')
+const proxyUrl = ref('')
 const folderId = ref<number | null>(null)
 
 watch(
@@ -33,6 +34,7 @@ watch(
     feedUrl.value = feed.feed_url
     siteUrl.value = feed.site_url
     description.value = feed.description
+    proxyUrl.value = feed.proxy_url
     folderId.value = feed.folder_id
   },
   { immediate: true },
@@ -47,6 +49,7 @@ const save = useLoading(async () => {
       feed_url: feedUrl.value.trim(),
       site_url: siteUrl.value.trim(),
       description: description.value,
+      proxy_url: proxyUrl.value.trim(),
       folder_id: folderId.value,
     })
     toast.success('Feed updated')
@@ -62,7 +65,7 @@ const detect = useLoading(async () => {
   const url = feedUrl.value.trim()
   if (!url) return
   try {
-    const d = await api.discoverFeed(url)
+    const d = await api.discoverFeed(url, proxyUrl.value.trim())
     title.value = d.title
     if (d.feed_url) feedUrl.value = d.feed_url
     siteUrl.value = d.site_url
@@ -97,6 +100,10 @@ const detect = useLoading(async () => {
       <label class="field">
         <span class="field__label">Description</span>
         <textarea v-model="description" class="field__input field__input--area" rows="3" aria-label="Description" />
+      </label>
+      <label class="field">
+        <span class="field__label">Proxy</span>
+        <input v-model="proxyUrl" class="field__input" type="text" placeholder="http:// or socks5://host:port (optional)" aria-label="Proxy URL" />
       </label>
       <label class="field">
         <span class="field__label">Group</span>

@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const feedCols = `id, title, feed_url, site_url, description, render_mode, folder_id,
+const feedCols = `id, title, feed_url, site_url, description, proxy_url, render_mode, folder_id,
 	etag, last_modified, last_fetched_at, fetch_error, created_at, updated_at,
 	(SELECT COUNT(*) FROM items i WHERE i.feed_id = feeds.id AND i.is_read = 0)`
 
@@ -14,7 +14,7 @@ func scanFeed(sc interface{ Scan(...any) error }) (Feed, error) {
 	var f Feed
 	var folderID sql.NullInt64
 	var lastFetched sql.NullString
-	err := sc.Scan(&f.ID, &f.Title, &f.FeedURL, &f.SiteURL, &f.Description, &f.RenderMode, &folderID,
+	err := sc.Scan(&f.ID, &f.Title, &f.FeedURL, &f.SiteURL, &f.Description, &f.ProxyURL, &f.RenderMode, &folderID,
 		&f.ETag, &f.LastModified, &lastFetched, &f.FetchError, &f.CreatedAt, &f.UpdatedAt, &f.Unread)
 	if folderID.Valid {
 		id := int(folderID.Int64)
@@ -48,9 +48,9 @@ func (r *Repo) CreateFeed(f Feed) (Feed, error) {
 		}
 		folderID = *f.FolderID
 	}
-	res, err := r.DB.Exec(`INSERT INTO feeds(title, feed_url, site_url, description, folder_id)
-		VALUES (?, ?, ?, ?, ?)`,
-		f.Title, f.FeedURL, f.SiteURL, f.Description, folderID)
+	res, err := r.DB.Exec(`INSERT INTO feeds(title, feed_url, site_url, description, proxy_url, folder_id)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		f.Title, f.FeedURL, f.SiteURL, f.Description, f.ProxyURL, folderID)
 	if isUnique(err) {
 		return f, ErrConflict{what: "feed_url already exists"}
 	}
@@ -141,7 +141,7 @@ func (f *FolderField) UnmarshalJSON(b []byte) error {
 // UpdateFeed applies only the fields that were supplied; nil pointers (and an
 // absent folder field) leave the corresponding column unchanged. A supplied
 // folder_id is validated to reference an existing folder unless it is Null.
-func (r *Repo) UpdateFeed(id int, title *string, feedURL, siteURL, description *string, folder FolderField) (Feed, error) {
+func (r *Repo) UpdateFeed(id int, title *string, feedURL, siteURL, description, proxyURL *string, folder FolderField) (Feed, error) {
 	sets := []string{"updated_at = CURRENT_TIMESTAMP"}
 	args := []any{}
 	if title != nil {
@@ -159,6 +159,10 @@ func (r *Repo) UpdateFeed(id int, title *string, feedURL, siteURL, description *
 	if description != nil {
 		sets = append(sets, "description = ?")
 		args = append(args, *description)
+	}
+	if proxyURL != nil {
+		sets = append(sets, "proxy_url = ?")
+		args = append(args, *proxyURL)
 	}
 	if folder.Null || folder.Set {
 		sets = append(sets, "folder_id = ?")

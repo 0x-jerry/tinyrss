@@ -10,7 +10,7 @@ const opmlSample = `<?xml version="1.0" encoding="UTF-8"?>
 <head><title>subscriptions</title></head>
 <body>
 <outline text="Tech">
-  <outline type="rss" text="Go Blog" xmlUrl="https://go.dev/blog/feed.atom" htmlUrl="https://go.dev/blog"/>
+  <outline type="rss" text="Go Blog" xmlUrl="https://go.dev/blog/feed.atom" htmlUrl="https://go.dev/blog" proxy="socks5://127.0.0.1:1080"/>
   <outline type="rss" text="Ars Technica" xmlUrl="https://feeds.arstechnica.com/arstechnica/index" htmlUrl="https://arstechnica.com"/>
 </outline>
 <outline type="rss" text="Hacker News" xmlUrl="https://news.ycombinator.com/rss" htmlUrl="https://news.ycombinator.com"/>
@@ -45,6 +45,7 @@ func TestOPMLRoundTrip(t *testing.T) {
 				Outlines []struct {
 					Text   string `xml:"text,attr"`
 					XMLURL string `xml:"xmlUrl,attr"`
+					Proxy  string `xml:"proxy,attr"`
 				} `xml:"outline"`
 			} `xml:"outline"`
 		} `xml:"body"`
@@ -55,6 +56,7 @@ func TestOPMLRoundTrip(t *testing.T) {
 
 	// One top-level folder ("Tech") with 2 feeds, one flat feed, all present.
 	byURL := map[string]bool{}
+	exportedProxy := ""
 	for _, o := range doc.Body.Outlines {
 		if o.XMLURL != "" {
 			byURL[o.XMLURL] = true
@@ -67,8 +69,27 @@ func TestOPMLRoundTrip(t *testing.T) {
 			if c.Text == "" || c.XMLURL == "" {
 				t.Errorf("folder feed missing text/xmlUrl: %+v", c)
 			}
+			if c.XMLURL == "https://go.dev/blog/feed.atom" {
+				exportedProxy = c.Proxy
+			}
 			byURL[c.XMLURL] = true
 		}
+	}
+	if exportedProxy != "socks5://127.0.0.1:1080" {
+		t.Fatalf("exported proxy = %q, want the imported proxy", exportedProxy)
+	}
+	feeds, err := repo.ListFeeds()
+	if err != nil {
+		t.Fatal(err)
+	}
+	importedProxy := ""
+	for _, f := range feeds {
+		if f.FeedURL == "https://go.dev/blog/feed.atom" {
+			importedProxy = f.ProxyURL
+		}
+	}
+	if importedProxy != "socks5://127.0.0.1:1080" {
+		t.Fatalf("imported proxy = %q, want the OPML attribute", importedProxy)
 	}
 	if len(byURL) != 3 {
 		t.Fatalf("exported %d feeds, want 3: %v", len(byURL), byURL)

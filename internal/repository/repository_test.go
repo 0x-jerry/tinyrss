@@ -29,8 +29,8 @@ func TestStoreMigrationsApplied(t *testing.T) {
 	if err := st.DB.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
-	if n != 8 {
-		t.Fatalf("want 8 applied migrations, got %d", n)
+	if n != 9 {
+		t.Fatalf("want 9 applied migrations, got %d", n)
 	}
 }
 
@@ -161,7 +161,7 @@ func TestUpdateFeedPartial(t *testing.T) {
 	}
 
 	title := "Renamed"
-	feed, err = repo.UpdateFeed(feed.ID, &title, nil, nil, nil, FolderField{})
+	feed, err = repo.UpdateFeed(feed.ID, &title, nil, nil, nil, nil, FolderField{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestUpdateFeedPartial(t *testing.T) {
 		t.Fatalf("after title-only update = %+v", feed)
 	}
 
-	feed, err = repo.UpdateFeed(feed.ID, nil, nil, nil, nil, FolderField{Null: true})
+	feed, err = repo.UpdateFeed(feed.ID, nil, nil, nil, nil, nil, FolderField{Null: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestUpdateFeedPartial(t *testing.T) {
 		t.Fatalf("title regressed to %q", feed.Title)
 	}
 
-	feed, err = repo.UpdateFeed(feed.ID, nil, nil, nil, nil, FolderField{Set: true, ID: folderB.ID})
+	feed, err = repo.UpdateFeed(feed.ID, nil, nil, nil, nil, nil, FolderField{Set: true, ID: folderB.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,11 +188,11 @@ func TestUpdateFeedPartial(t *testing.T) {
 		t.Fatalf("folder should be B, got %v", feed.FolderID)
 	}
 
-	if _, err := repo.UpdateFeed(feed.ID, nil, nil, nil, nil, FolderField{Set: true, ID: 99999}); err == nil {
+	if _, err := repo.UpdateFeed(feed.ID, nil, nil, nil, nil, nil, FolderField{Set: true, ID: 99999}); err == nil {
 		t.Fatal("expected not-found for missing folder")
 	}
 
-	feed2, err := repo.UpdateFeed(feed.ID, nil, nil, nil, nil, FolderField{})
+	feed2, err := repo.UpdateFeed(feed.ID, nil, nil, nil, nil, nil, FolderField{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,5 +463,34 @@ func TestRefreshIntervalSetting(t *testing.T) {
 	}
 	if s.MinRefreshGapSeconds != 300 {
 		t.Fatalf("min refresh gap after set = %d, want 300", s.MinRefreshGapSeconds)
+	}
+}
+
+func TestFeedProxyRoundTrip(t *testing.T) {
+	repo := newTestRepo(t)
+	feed, err := repo.CreateFeed(Feed{Title: "F", FeedURL: "https://example.com/rss", ProxyURL: "socks5://user:pass@127.0.0.1:1080"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feed.ProxyURL != "socks5://user:pass@127.0.0.1:1080" {
+		t.Fatalf("create lost proxy: %+v", feed)
+	}
+
+	proxy := "http://127.0.0.1:3128"
+	feed, err = repo.UpdateFeed(feed.ID, nil, nil, nil, nil, &proxy, FolderField{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feed.ProxyURL != proxy {
+		t.Fatalf("update proxy = %q, want %q", feed.ProxyURL, proxy)
+	}
+
+	empty := ""
+	feed, err = repo.UpdateFeed(feed.ID, nil, nil, nil, nil, &empty, FolderField{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feed.ProxyURL != "" {
+		t.Fatalf("clear proxy = %q, want empty", feed.ProxyURL)
 	}
 }

@@ -23,6 +23,7 @@ export interface CreateFeedPatch {
   title?: string
   site_url?: string
   description?: string
+  proxy_url?: string
   folder_id?: number | null
 }
 
@@ -35,11 +36,12 @@ export const api = {
   // Feeds
   listFeeds: () => request<Feed[]>('GET', '/api/feeds'),
   createFeed: (patch: CreateFeedPatch) => request<Feed>('POST', '/api/feeds', patch),
-  discoverFeed: (url: string) => request<DiscoveredFeed>('POST', '/api/feeds/discover', { url }),
+  discoverFeed: (url: string, proxyUrl?: string) =>
+    request<DiscoveredFeed>('POST', '/api/feeds/discover', { url, proxy_url: proxyUrl }),
   getFeed: (id: number) => request<Feed>('GET', `/api/feeds/${id}`),
   updateFeed: (
     id: number,
-    patch: { title: string; feed_url?: string; site_url?: string; description?: string; folder_id?: number | null },
+    patch: { title: string; feed_url?: string; site_url?: string; description?: string; proxy_url?: string; folder_id?: number | null },
   ) => request<Feed>('PUT', `/api/feeds/${id}`, patch),
   deleteFeed: (id: number) => request<void>('DELETE', `/api/feeds/${id}`),
   refreshFeed: (id: number) => request<FeedRefreshResult>('POST', `/api/feeds/${id}/refresh`),
@@ -60,7 +62,8 @@ export const api = {
     request<ReadAllResult>('POST', `/api/items/read-all${readAllQuery(feedId)}`),
 
   // Render
-  renderUrl: (url: string) => requestText('GET', `/api/render?url=${encodeURIComponent(url)}`),
+  renderUrl: (url: string, feedId?: number) =>
+    requestText('GET', `/api/render?url=${encodeURIComponent(url)}${feedId != null ? `&feed_id=${feedId}` : ''}`),
 
   // System
   refreshAllFeeds: () => request<RefreshResult>('POST', '/api/refresh'),

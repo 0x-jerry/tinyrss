@@ -19,7 +19,7 @@ const renderBodyLimit = 8 << 20 // cap proxied article bodies
 // content, strips scripts, wraps it in a reader-styled document, and caches the
 // result in the render_cache table keyed by URL. Only http/https are allowed;
 // non-200 responses are errors. Cached results are returned without re-fetching.
-func (f *Fetcher) FetchRender(rawURL string) ([]byte, error) {
+func (f *Fetcher) FetchRender(rawURL, proxyURL string) ([]byte, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func (f *Fetcher) FetchRender(rawURL string) ([]byte, error) {
 		if cached, ok, _ := f.repo.GetRenderCache(key); ok {
 			return cached, nil
 		}
-		body, err := f.fetchPage(u)
+		body, err := f.fetchPage(u, proxyURL)
 		if err != nil {
 			return nil, err
 		}
@@ -53,14 +53,18 @@ func (f *Fetcher) FetchRender(rawURL string) ([]byte, error) {
 	return v.([]byte), nil
 }
 
-func (f *Fetcher) fetchPage(u *url.URL) ([]byte, error) {
+func (f *Fetcher) fetchPage(u *url.URL, proxyURL string) ([]byte, error) {
+	client, err := f.clientFor(proxyURL)
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(f.ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "text/html")
-	resp, err := f.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

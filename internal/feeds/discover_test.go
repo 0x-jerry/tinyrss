@@ -13,7 +13,7 @@ func TestDiscoverDirectFeedURL(t *testing.T) {
 	defer srv.Close()
 
 	f := NewFetcher(newTestRepo(t))
-	d, err := f.Discover(srv.URL + "/feed.xml")
+	d, err := f.Discover(srv.URL + "/feed.xml", "")
 	if err != nil {
 		t.Fatalf("discover direct feed: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestDiscoverAutodiscoverAbsolute(t *testing.T) {
 	defer srv.Close()
 
 	f := NewFetcher(newTestRepo(t))
-	d, err := f.Discover(srv.URL + "/")
+	d, err := f.Discover(srv.URL + "/", "")
 	if err != nil {
 		t.Fatalf("autodiscover: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestDiscoverAutodiscoverRelative(t *testing.T) {
 	defer srv.Close()
 
 	f := NewFetcher(newTestRepo(t))
-	d, err := f.Discover(srv.URL + "/blog/index.html")
+	d, err := f.Discover(srv.URL + "/blog/index.html", "")
 	if err != nil {
 		t.Fatalf("autodiscover relative: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestDiscoverNoFeedLinks(t *testing.T) {
 	defer srv.Close()
 
 	f := NewFetcher(newTestRepo(t))
-	if _, err := f.Discover(srv.URL + "/"); err == nil {
+	if _, err := f.Discover(srv.URL + "/", ""); err == nil {
 		t.Fatal("expected error for a page without feed links")
 	}
 }

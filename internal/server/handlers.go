@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"tinyrss/internal/feeds"
 	"tinyrss/internal/repository"
 )
 
@@ -68,6 +69,7 @@ func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 		Title       string `json:"title"`
 		SiteURL     string `json:"site_url"`
 		Description string `json:"description"`
+		ProxyURL    string `json:"proxy_url"`
 		FolderID    *int   `json:"folder_id"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
@@ -81,6 +83,11 @@ func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "feed_url is required")
 		return
 	}
+	proxyURL := strings.TrimSpace(body.ProxyURL)
+	if err := feeds.ValidateProxyURL(proxyURL); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	title := strings.TrimSpace(body.Title)
 	if title == "" {
 		title = feedURL
@@ -90,6 +97,7 @@ func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 		FeedURL:     feedURL,
 		SiteURL:     strings.TrimSpace(body.SiteURL),
 		Description: body.Description,
+		ProxyURL:    proxyURL,
 		FolderID:    body.FolderID,
 	})
 	if err != nil {
@@ -101,7 +109,8 @@ func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDiscoverFeed(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		URL string `json:"url"`
+		URL      string `json:"url"`
+		ProxyURL string `json:"proxy_url"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
@@ -111,7 +120,7 @@ func (s *Server) handleDiscoverFeed(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "url is required")
 		return
 	}
-	d, err := s.fetcher.Discover(body.URL)
+	d, err := s.fetcher.Discover(body.URL, strings.TrimSpace(body.ProxyURL))
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity,
 			"feed URL is not parseable as RSS/Atom: "+err.Error())
@@ -139,10 +148,11 @@ func (s *Server) handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Title       *string           `json:"title"`
-		FeedURL     *string           `json:"feed_url"`
-		SiteURL     *string           `json:"site_url"`
-		Description *string           `json:"description"`
+		Title       *string               `json:"title"`
+		FeedURL     *string               `json:"feed_url"`
+		SiteURL     *string               `json:"site_url"`
+		Description *string               `json:"description"`
+		ProxyURL    *string               `json:"proxy_url"`
 		FolderID    repository.FolderField `json:"folder_id"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
@@ -157,7 +167,16 @@ func (s *Server) handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
 		}
 		feedURL = &trimmed
 	}
-	feed, err := s.repo.UpdateFeed(id, body.Title, feedURL, body.SiteURL, body.Description, body.FolderID)
+	proxyURL := body.ProxyURL
+	if body.ProxyURL != nil {
+		trimmed := strings.TrimSpace(*body.ProxyURL)
+		if err := feeds.ValidateProxyURL(trimmed); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		proxyURL = &trimmed
+	}
+	feed, err := s.repo.UpdateFeed(id, body.Title, feedURL, body.SiteURL, body.Description, proxyURL, body.FolderID)
 	if err != nil {
 		s.repoError(w, err)
 		return
@@ -368,7 +387,13 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "url must be http(s)")
 		return
 	}
-	body, err := s.fetcher.FetchRender(raw)
+	proxyURL := ""
+	if fid := atoiDefault(r.URL.Query().Get("feed_id"), 0); fid > 0 {
+		if feed, err := s.repo.GetFeed(fid); err == nil {
+			proxyURL = feed.ProxyURL
+		}
+	}
+	body, err := s.fetcher.FetchRender(raw, proxyURL)
 	if err != nil {
 		writeRenderError(w, "Could not load page: "+err.Error())
 		return

@@ -11,6 +11,7 @@ type opmlOutline struct {
 	Type     string `xml:"type,attr"`
 	XMLURL   string `xml:"xmlUrl,attr"`
 	HTMLURL  string `xml:"htmlUrl,attr"`
+	Proxy    string `xml:"proxy,attr"`
 	Children []opmlOutline `xml:"outline"`
 }
 
@@ -68,6 +69,7 @@ func (r *Repo) addFeedFromOPML(o opmlOutline, folderID *int) (Feed, error) {
 		Title:    outlineName(o),
 		FeedURL:  o.XMLURL,
 		SiteURL:  o.HTMLURL,
+		ProxyURL: o.Proxy,
 		FolderID: folderID,
 	})
 }
@@ -87,6 +89,7 @@ type opmlOutlineOut struct {
 	Type    string           `xml:"type,attr"`
 	XMLURL  string           `xml:"xmlUrl,attr"`
 	HTMLURL string           `xml:"htmlUrl,attr,omitempty"`
+	Proxy   string           `xml:"proxy,attr,omitempty"`
 	Outlines []opmlOutlineOut `xml:"outline,omitempty"`
 }
 
@@ -117,7 +120,7 @@ func (r *Repo) ExportOPML() ([]byte, error) {
 	byFolder := map[int][]opmlOutlineOut{}
 	var uncat []opmlOutlineOut
 	for _, fd := range feeds {
-		o := opmlOutlineOut{Text: fd.Title, Type: "rss", XMLURL: fd.FeedURL, HTMLURL: fd.SiteURL}
+		o := opmlOutlineOut{Text: fd.Title, Type: "rss", XMLURL: fd.FeedURL, HTMLURL: fd.SiteURL, Proxy: fd.ProxyURL}
 		if fd.FolderID == nil {
 			uncat = append(uncat, o)
 		} else {

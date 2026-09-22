@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -628,6 +629,92 @@ func TestFeedStatsEndpoint(t *testing.T) {
 	}
 	if d := decode[statsBody](t, body).Days; d != 1 {
 		t.Fatalf("clamped-low days = %d, want 1", d)
+	}
+}
+
+func TestFeedProxyConfig(t *testing.T) {
+	ts, _ := newTestServer(t)
+	feedSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(testRSS))
+	}))
+	defer feedSrv.Close()
+
+	resp, body := do(t, ts, "POST", "/api/feeds", token, strings.NewReader(
+		`{"feed_url":"`+feedSrv.URL+`/feed","proxy_url":"socks5://127.0.0.1:1080"}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("create with proxy: %d %s", resp.StatusCode, body)
+	}
+	feed := decode[repository.Feed](t, body)
+	if feed.ProxyURL != "socks5://127.0.0.1:1080" {
+		t.Fatalf("created proxy = %q", feed.ProxyURL)
+	}
+
+	resp, body = do(t, ts, "PUT", "/api/feeds/"+itoa(feed.ID), token, strings.NewReader(`{"proxy_url":"http://127.0.0.1:3128"}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("update proxy: %d %s", resp.StatusCode, body)
+	}
+	if decode[repository.Feed](t, body).ProxyURL != "http://127.0.0.1:3128" {
+		t.Fatalf("updated proxy: %s", body)
+	}
+
+	resp, body = do(t, ts, "PUT", "/api/feeds/"+itoa(feed.ID), token, strings.NewReader(`{"proxy_url":""}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("clear proxy: %d %s", resp.StatusCode, body)
+	}
+	if decode[repository.Feed](t, body).ProxyURL != "" {
+		t.Fatalf("proxy not cleared: %s", body)
+	}
+
+	if resp, _ := do(t, ts, "POST", "/api/feeds", token, strings.NewReader(
+		`{"feed_url":"`+feedSrv.URL+`/x","proxy_url":"ftp://host:21"}`)); resp.StatusCode != 400 {
+		t.Fatalf("invalid create proxy status = %d", resp.StatusCode)
+	}
+	if resp, _ := do(t, ts, "PUT", "/api/feeds/"+itoa(feed.ID), token, strings.NewReader(`{"proxy_url":"nope"}`)); resp.StatusCode != 400 {
+		t.Fatalf("invalid update proxy status = %d", resp.StatusCode)
+	}
+}
+
+func TestDiscoverFeedThroughProxy(t *testing.T) {
+	ts, _ := newTestServer(t)
+	proxySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(testRSS))
+	}))
+	defer proxySrv.Close()
+
+	resp, body := do(t, ts, "POST", "/api/feeds/discover", token, strings.NewReader(
+		`{"url":"http://feed.invalid/feed","proxy_url":"`+proxySrv.URL+`"}`))
+	if resp.StatusCode != 200 {
+		t.Fatalf("discover via proxy: %d %s", resp.StatusCode, body)
+	}
+	if d := decode[feeds.Discovered](t, body); d.Title != "Example Blog" {
+		t.Fatalf("discover via proxy result = %+v", d)
+	}
+}
+
+func TestRenderUsesFeedProxy(t *testing.T) {
+	ts, repo := newTestServer(t)
+	var hits int32
+	proxySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		_, _ = w.Write([]byte("<html><body><p>Proxied article</p></body></html>"))
+	}))
+	defer proxySrv.Close()
+
+	feed, err := repo.CreateFeed(repository.Feed{Title: "F", FeedURL: "http://feed.invalid/rss", ProxyURL: proxySrv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, body := do(t, ts, "GET",
+		"/api/render?url="+url.QueryEscape("http://feed.invalid/art")+"&feed_id="+itoa(feed.ID), token, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("render via feed proxy: %d %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(string(body), "Proxied article") {
+		t.Fatalf("proxied content missing: %s", body)
+	}
+	if atomic.LoadInt32(&hits) == 0 {
+		t.Fatal("render did not go through the feed proxy")
 	}
 }
 

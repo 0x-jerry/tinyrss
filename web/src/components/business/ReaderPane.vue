@@ -89,7 +89,7 @@ const serverHtml = computedAsync(
       cancelled = true
     })
     try {
-      const html = await api.renderUrl(url)
+      const html = await api.renderUrl(url, feed.value?.id)
       return cancelled ? '' : html
     } catch (e) {
       if (cancelled) return ''

@@ -47,6 +47,7 @@ export interface UpdateFeedPatch {
   feed_url?: string
   site_url?: string
   description?: string
+  proxy_url?: string
   folder_id?: number | null
 }
 
@@ -55,6 +56,7 @@ export interface AddFeedPatch {
   title?: string
   site_url?: string
   description?: string
+  proxy_url?: string
   folder_id?: number | null
 }
 

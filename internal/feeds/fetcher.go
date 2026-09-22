@@ -53,6 +53,8 @@ type Fetcher struct {
 	renderSf  singleflight.Group
 	sem       chan struct{}
 	renderSem chan struct{}
+	proxyMu   sync.Mutex
+	proxied   map[string]*http.Client
 	stopCh    chan struct{}
 	startOnce sync.Once
 	stopOnce  sync.Once
@@ -63,29 +65,15 @@ type Fetcher struct {
 }
 
 func NewFetcher(repo *repository.Repo) *Fetcher {
-	client := &http.Client{
-		Timeout: 20 * time.Second,
-		Transport: &http.Transport{
-			MaxIdleConns:        workerCount * 2,
-			MaxIdleConnsPerHost: workerCount,
-			IdleConnTimeout:     90 * time.Second,
-			ForceAttemptHTTP2:   true,
-		},
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 5 {
-				return errors.New("too many redirects")
-			}
-			return nil
-		},
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Fetcher{
 		repo:      repo,
-		client:    client,
+		client:    newHTTPClient(baseTransport()),
 		ctx:       ctx,
 		cancel:    cancel,
 		sem:       make(chan struct{}, workerCount),
 		renderSem: make(chan struct{}, renderWorkers),
+		proxied:   map[string]*http.Client{},
 	}
 }
 
@@ -163,6 +151,11 @@ func (f *Fetcher) Stop() {
 	})
 	f.stopWg.Wait()
 	f.refreshWg.Wait()
+	f.proxyMu.Lock()
+	for _, c := range f.proxied {
+		c.CloseIdleConnections()
+	}
+	f.proxyMu.Unlock()
 }
 
 // lastFetchedAt parses a feed's recorded fetch time; zero means never fetched.
@@ -328,13 +321,17 @@ func (f *Fetcher) Progress() RefreshJob {
 
 // Probe downloads and parses a feed URL with no stored etag — used when adding
 // a feed, to validate the URL and capture metadata. Unparseable URLs error.
-func (f *Fetcher) Probe(url string) (*gofeed.Feed, error) {
+func (f *Fetcher) Probe(url, proxyURL string) (*gofeed.Feed, error) {
+	client, err := f.clientFor(proxyURL)
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(f.ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := f.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -354,6 +351,11 @@ func (f *Fetcher) doRefresh(id int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	client, err := f.clientFor(feed.ProxyURL)
+	if err != nil {
+		_ = f.repo.RecordFetchResult(id, "", "", err.Error(), false)
+		return 0, err
+	}
 	req, err := http.NewRequestWithContext(f.ctx, http.MethodGet, feed.FeedURL, nil)
 	if err != nil {
 		return 0, err
@@ -366,7 +368,7 @@ func (f *Fetcher) doRefresh(id int) (int, error) {
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := f.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		if f.ctx.Err() != nil {
 			return 0, err

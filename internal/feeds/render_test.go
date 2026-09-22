@@ -44,7 +44,7 @@ func TestFetchRenderExtractsAndStrips(t *testing.T) {
 	f := NewFetcher(repo)
 	srv, hits := servePage(t, articlePage)
 
-	out, err := f.FetchRender(srv.URL + "/art")
+	out, err := f.FetchRender(srv.URL + "/art", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestFetchRenderExtractsAndStrips(t *testing.T) {
 	}
 
 	// Same URL hits the DB cache, so the upstream is fetched only once.
-	if _, err := f.FetchRender(srv.URL + "/art"); err != nil {
+	if _, err := f.FetchRender(srv.URL + "/art", ""); err != nil {
 		t.Fatal(err)
 	}
 	if n := atomic.LoadInt64(hits); n != 1 {
@@ -85,7 +85,7 @@ func TestFetchRenderFallbackForNonArticle(t *testing.T) {
 	f := NewFetcher(repo)
 	srv, _ := servePage(t, `<html><body><p>just a bare page</p><script>evil()</script></body></html>`)
 
-	out, err := f.FetchRender(srv.URL + "/")
+	out, err := f.FetchRender(srv.URL + "/", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestRenderConcurrentSameURLCoalesces(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			results[i], errs[i] = f.FetchRender(url)
+			results[i], errs[i] = f.FetchRender(url, "")
 		}(i)
 	}
 	close(start)
@@ -172,7 +172,7 @@ func TestRenderConcurrencyBounded(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, _ = f.FetchRender(fmt.Sprintf("%s/art-%d", srv.URL, i))
+			_, _ = f.FetchRender(fmt.Sprintf("%s/art-%d", srv.URL, i), "")
 		}(i)
 	}
 	wg.Wait()

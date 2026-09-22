@@ -29,6 +29,7 @@ type Feed struct {
 	FeedURL       string `json:"feed_url"`
 	SiteURL       string `json:"site_url"`
 	Description   string `json:"description"`
+	ProxyURL      string `json:"proxy_url"` // empty = direct connection
 	RenderMode    int    `json:"render_mode"` // 0=content, 1=iframe site view
 	FolderID      *int   `json:"folder_id"`
 	ETag          string `json:"etag"`

@@ -63,8 +63,8 @@ export interface ViewNav {
   clear: () => void
   /** Subscribe to feed scope changes (item-only changes do not fire). */
   onScopeChange: (fn: () => void) => void
-  push: (patch: Partial<ViewState>) => void
-  replace: (patch: Partial<ViewState>) => void
+  push: (patch: Partial<ViewState>) => Promise<void>
+  replace: (patch: Partial<ViewState>) => Promise<void>
   back: (fallback: Partial<ViewState>) => void
 }
 
@@ -84,15 +84,19 @@ export const useViewNav = createSharedComposable((): ViewNav => {
   // ?add_feed is a transient subscribe-entry parameter handled by FeedTree when
   // it mounts (it opens the dialog pre-filled, then clears the param). While it
   // is present the URL-nav layer stands aside: it must not rewrite the URL (and
-  // drop add_feed) nor apply selection from a URL that has no scope yet. The two
-  // watchers stay idempotent — A only mutates state to match the URL, and B
-  // always writes back the exact current state — so they converge to a fixed
-  // point rather than looping.
+  // drop add_feed) nor apply selection from a URL that has no scope yet. Both
+  // watcher A (URL -> state) and selectItem (state -> URL) honour this, so the
+  // layer converges to a fixed point rather than looping.
   const hasAddFeed = () => route.query.add_feed != null
+  // Selection and the mobile screen live only on the home route's URL. When the
+  // user navigates to another route (/stats, …), the sync watchers must stand
+  // aside: they must not clear the selection, fire the scope callback, or
+  // rewrite that route's URL. State is re-synced on return to home.
+  const isHome = () => route.path === '/'
 
   // Set while a handler-initiated navigation (push/replace/back) is in flight.
-  // vue-router cancels an overlapping second navigation: after a push, the item
-  // watcher's replace would cancel that push and turn it into an in-place
+  // vue-router cancels an overlapping second navigation: after a push,
+  // selectItem's replace would cancel that push and turn it into an in-place
   // replace, silently dropping the history entry (so back lands on the wrong
   // screen). Re-armed once the navigation settles.
   let navPending = false
@@ -123,7 +127,7 @@ export const useViewNav = createSharedComposable((): ViewNav => {
   watch(
     () => route.query,
     (q) => {
-      if (hasAddFeed()) return
+      if (!isHome() || hasAddFeed()) return
       const v = parseView(q)
       screen.value = v.view
       const scopeChanged = v.feedId !== state.feedId
@@ -134,31 +138,20 @@ export const useViewNav = createSharedComposable((): ViewNav => {
     { immediate: true },
   )
 
-  // Item -> URL (j/k, reader prev/next). We don't push here, so paging through
-  // articles replaces the current entry instead of growing history.
-  watch(
-    () => state.itemId,
-    (id) => {
-      if (hasAddFeed() || navPending) return
-      router.replace({ query: buildQuery({ itemId: id }) })
-    },
-    { immediate: true },
-  )
-
   function commit(next: Partial<SelectionState>, scopeChanged: boolean) {
     Object.assign(state, next)
     if (scopeChanged) onScope?.()
   }
 
-  function push(patch: Partial<ViewState>) {
+  async function push(patch: Partial<ViewState>): Promise<void> {
     if (patch.view != null) screen.value = patch.view
     navPending = true
-    router.push({ query: buildQuery(patch) })
+    await router.push({ query: buildQuery(patch) })
   }
-  function replace(patch: Partial<ViewState>) {
+  async function replace(patch: Partial<ViewState>): Promise<void> {
     if (patch.view != null) screen.value = patch.view
     navPending = true
-    router.replace({ query: buildQuery(patch) })
+    await router.replace({ query: buildQuery(patch) })
   }
   // Backing out of a pane pops browser history so "back" from the returned pane
   // goes to the previous scope rather than forward into the closed pane. When
@@ -180,23 +173,34 @@ export const useViewNav = createSharedComposable((): ViewNav => {
   // feeds screen (back from the list returns to feeds); re-selecting the current
   // feed, e.g. its name in the reader, skips that detour. Desktop just pushes
   // the new scope — its list is always visible.
-  function openScope(previousFeedId: number | null) {
+  async function openScope(previousFeedId: number | null) {
     const feedId = state.feedId
     const scope: Partial<ViewState> = { feedId }
 
     if (isMobile.value && previousFeedId !== feedId) {
-      replace({ ...scope, view: 'feeds' })
+      // Await before the list push below: two synchronous navigations would have
+      // vue-router cancel the first, dropping feedId from the feeds entry so a
+      // browser-back re-selected the previous scope instead of this feed.
+      await replace({ ...scope, view: 'feeds' })
     }
 
     const patch: Partial<ViewState> = { ...scope }
     if (isMobile.value) patch.view = 'list'
-    push(patch)
+    await push(patch)
   }
 
   function selectFeed(id: number | null) {
     const previousFeedId = state.feedId
     commit({ feedId: id }, true)
     openScope(previousFeedId)
+  }
+  function selectItem(id: number | null) {
+    commit({ itemId: id }, false)
+    // Item-only changes replace the current URL entry (paging through articles
+    // doesn't grow history). Stand aside while a navigation is in flight so our
+    // replace can't cancel it, and while add_feed is present.
+    if (!isHome() || hasAddFeed() || navPending) return
+    router.replace({ query: buildQuery({ itemId: id }) })
   }
   function clearView() {
     const previousFeedId = state.feedId
@@ -208,7 +212,7 @@ export const useViewNav = createSharedComposable((): ViewNav => {
     state: readonly(state),
     screen: readonly(screen),
     selectFeed,
-    selectItem: (id) => commit({ itemId: id }, false),
+    selectItem,
     clear: clearView,
     onScopeChange: (fn) => {
       onScope = fn

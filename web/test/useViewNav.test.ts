@@ -61,7 +61,7 @@ describe('mergeQuery', () => {
     })
   })
 
-  it('overwrites managed view params, carrying forward a legacy folder param', () => {
+  it('overwrites managed params, carrying forward an unmanaged folder param', () => {
     expect(
       mergeQuery(
         { feed: '1', folder: '2', item: '3', view: 'list' },

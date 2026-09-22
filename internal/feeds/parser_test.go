@@ -72,11 +72,12 @@ func TestNormalizeMissingFields(t *testing.T) {
 		t.Fatalf("want 1 item, got %d", len(items))
 	}
 	it := items[0]
-	// No guid or date: fall back to link and now, respectively.
+	// No guid or date: fall back to link and the oldest time, respectively.
 	if it.GUID != "https://example.com/x" {
 		t.Errorf("guid fallback = %q", it.GUID)
 	}
-	if it.PublishedAt == "" {
-		t.Error("published_at should fall back to now")
+	const oldest = "1900-01-01 00:00:00"
+	if it.PublishedAt != oldest {
+		t.Errorf("published_at should fall back to the oldest time, got %q", it.PublishedAt)
 	}
 }

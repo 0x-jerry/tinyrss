@@ -404,9 +404,12 @@ func (f *Fetcher) doRefresh(id int) (int, error) {
 }
 
 // normalizeItems maps a gofeed.Feed into our Item rows. GUID falls back to
-// link/title; malformed or missing dates fall back to now.
+// link/title; malformed or missing dates fall back to a fixed oldest time
+// (1900-01-01 00:00:00).
 func normalizeItems(pf *gofeed.Feed) []repository.Item {
-	now := time.Now().UTC().Format(repository.TimeLayout)
+	// The oldest representable value we store: items whose publish date could
+	// not be parsed sort to the bottom of the newest-first list, not the top.
+	const oldest = "1900-01-01 00:00:00"
 	items := make([]repository.Item, 0, len(pf.Items))
 	for _, it := range pf.Items {
 		guid := it.GUID
@@ -420,7 +423,7 @@ func normalizeItems(pf *gofeed.Feed) []repository.Item {
 		if pub == nil {
 			pub = it.UpdatedParsed
 		}
-		published := now
+		published := oldest
 		if pub != nil {
 			published = pub.UTC().Format(repository.TimeLayout)
 		}

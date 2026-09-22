@@ -62,8 +62,7 @@ export const api = {
     request<ReadAllResult>('POST', `/api/items/read-all${readAllQuery(feedId)}`),
 
   // Render
-  renderUrl: (url: string, feedId?: number) =>
-    requestText('GET', `/api/render?url=${encodeURIComponent(url)}${feedId != null ? `&feed_id=${feedId}` : ''}`),
+  renderItem: (itemId: number) => requestText('GET', `/api/render?item_id=${itemId}`),
 
   // System
   refreshAllFeeds: () => request<RefreshResult>('POST', '/api/refresh'),

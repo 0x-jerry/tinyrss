@@ -81,15 +81,15 @@ const serverLoading = ref(false)
 const serverError = ref<string | null>(null)
 const serverHtml = computedAsync(
   async (onCancel) => {
-    const url = kind.value === 'server' ? detail.value?.url : null
+    const itemId = kind.value === 'server' ? detail.value?.id : null
     serverError.value = null
-    if (!url) return ''
+    if (itemId == null) return ''
     let cancelled = false
     onCancel(() => {
       cancelled = true
     })
     try {
-      const html = await api.renderUrl(url, feed.value?.id)
+      const html = await api.renderItem(itemId)
       return cancelled ? '' : html
     } catch (e) {
       if (cancelled) return ''

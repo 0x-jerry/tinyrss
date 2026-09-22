@@ -7,7 +7,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -395,7 +394,7 @@ func TestSetRenderMode(t *testing.T) {
 }
 
 func TestRenderEndpoint(t *testing.T) {
-	ts, _ := newTestServer(t)
+	ts, repo := newTestServer(t)
 
 	page := `<html><head><title>Art</title><script>window.evil=1</script></head>
 		<body><p onclick="evil()">Hello article</p><img src="/pic.png"></body></html>`
@@ -410,12 +409,32 @@ func TestRenderEndpoint(t *testing.T) {
 	}))
 	defer upstream.Close()
 
+	feed, err := repo.CreateFeed(repository.Feed{Title: "F", FeedURL: upstream.URL + "/feed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AddItems(feed.ID, []repository.Item{
+		{GUID: "art", Title: "Art", URL: upstream.URL + "/art"},
+		{GUID: "err", Title: "Err", URL: upstream.URL + "/err"},
+		{GUID: "bad", Title: "Bad", URL: "file:///etc/passwd"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	items, _, err := repo.ListItems(repository.ItemFilter{FeedID: feed.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byTitle := map[string]int{}
+	for _, it := range items {
+		byTitle[it.Title] = it.ID
+	}
+
 	// Auth required.
-	if resp, _ := do(t, ts, "GET", "/api/render?url="+url.QueryEscape(upstream.URL+"/art"), "", nil); resp.StatusCode != 401 {
+	if resp, _ := do(t, ts, "GET", "/api/render?item_id="+itoa(byTitle["Art"]), "", nil); resp.StatusCode != 401 {
 		t.Fatalf("no-token status = %d", resp.StatusCode)
 	}
 
-	resp, body := do(t, ts, "GET", "/api/render?url="+url.QueryEscape(upstream.URL+"/art"), token, nil)
+	resp, body := do(t, ts, "GET", "/api/render?item_id="+itoa(byTitle["Art"]), token, nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("render: %d %s", resp.StatusCode, body)
 	}
@@ -441,18 +460,22 @@ func TestRenderEndpoint(t *testing.T) {
 		t.Fatalf("scripts not stripped from rendered page: %s", body)
 	}
 
-	// A second render of the same URL is served from the DB cache.
-	do(t, ts, "GET", "/api/render?url="+url.QueryEscape(upstream.URL+"/art"), token, nil)
+	// A second render of the same item is served from the DB cache.
+	do(t, ts, "GET", "/api/render?item_id="+itoa(byTitle["Art"]), token, nil)
 	if hits != 1 {
 		t.Fatalf("upstream hits = %d, want 1 (cached)", hits)
 	}
 
-	if resp, _ := do(t, ts, "GET", "/api/render?url="+url.QueryEscape("file:///etc/passwd"), token, nil); resp.StatusCode != 400 {
+	if resp, _ := do(t, ts, "GET", "/api/render?item_id="+itoa(byTitle["Bad"]), token, nil); resp.StatusCode != 502 {
 		t.Fatalf("bad scheme status = %d", resp.StatusCode)
 	}
 
-	if resp, _ := do(t, ts, "GET", "/api/render?url="+url.QueryEscape(upstream.URL+"/err"), token, nil); resp.StatusCode != 502 {
+	if resp, _ := do(t, ts, "GET", "/api/render?item_id="+itoa(byTitle["Err"]), token, nil); resp.StatusCode != 502 {
 		t.Fatalf("upstream error status = %d", resp.StatusCode)
+	}
+
+	if resp, _ := do(t, ts, "GET", "/api/render", token, nil); resp.StatusCode != 400 {
+		t.Fatalf("missing item_id status = %d", resp.StatusCode)
 	}
 }
 
@@ -704,9 +727,15 @@ func TestRenderUsesFeedProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := repo.AddItems(feed.ID, []repository.Item{{GUID: "art", Title: "Art", URL: "http://feed.invalid/art"}}); err != nil {
+		t.Fatal(err)
+	}
+	items, _, err := repo.ListItems(repository.ItemFilter{FeedID: feed.ID})
+	if err != nil || len(items) == 0 {
+		t.Fatalf("seed item: %v", err)
+	}
 
-	resp, body := do(t, ts, "GET",
-		"/api/render?url="+url.QueryEscape("http://feed.invalid/art")+"&feed_id="+itoa(feed.ID), token, nil)
+	resp, body := do(t, ts, "GET", "/api/render?item_id="+itoa(items[0].ID), token, nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("render via feed proxy: %d %s", resp.StatusCode, body)
 	}

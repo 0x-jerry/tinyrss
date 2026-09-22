@@ -6,7 +6,6 @@ import (
 	"html"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -377,23 +376,21 @@ func (s *Server) handleReadAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
-	raw := r.URL.Query().Get("url")
-	if raw == "" {
-		writeError(w, http.StatusBadRequest, "url is required")
+	id := atoiDefault(r.URL.Query().Get("item_id"), 0)
+	if id <= 0 {
+		writeError(w, http.StatusBadRequest, "item_id is required")
 		return
 	}
-	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
-		writeError(w, http.StatusBadRequest, "url must be http(s)")
+	item, err := s.repo.GetItem(id)
+	if err != nil {
+		s.repoError(w, err)
 		return
 	}
 	proxyURL := ""
-	if fid := atoiDefault(r.URL.Query().Get("feed_id"), 0); fid > 0 {
-		if feed, err := s.repo.GetFeed(fid); err == nil {
-			proxyURL = feed.ProxyURL
-		}
+	if feed, err := s.repo.GetFeed(item.FeedID); err == nil {
+		proxyURL = feed.ProxyURL
 	}
-	body, err := s.fetcher.FetchRender(raw, proxyURL)
+	body, err := s.fetcher.FetchRender(item.URL, proxyURL)
 	if err != nil {
 		writeRenderError(w, "Could not load page: "+err.Error())
 		return

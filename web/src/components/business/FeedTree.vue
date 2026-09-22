@@ -70,10 +70,16 @@ const search = ref('')
 const filteredTree = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (!q) return feeds.state.tree
-  return buildTree(
+  const tree = buildTree(
     feeds.state.feeds.filter((f) => f.title.toLowerCase().includes(q)),
     feeds.state.folders,
   )
+  return {
+    ...tree,
+    // While filtering, drop folders that contain no matching feeds so search
+    // results only show folders that actually have a match inside.
+    folderNodes: tree.folderNodes.filter((node) => node.feeds.length > 0),
+  }
 })
 
 // While searching, expand every folder so matches inside collapsed ones are visible.

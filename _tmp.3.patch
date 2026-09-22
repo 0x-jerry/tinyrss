@@ -1,0 +1,13 @@
+diff --git a/web/package.json b/web/package.json
+index 97adbc3..e57bb13 100644
+--- a/web/package.json
++++ b/web/package.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "tinyrss-web",
+   "private": true,
+-  "version": "0.5.0",
++  "version": "0.5.1",
+   "type": "module",
+   "scripts": {
+     "dev": "vite",

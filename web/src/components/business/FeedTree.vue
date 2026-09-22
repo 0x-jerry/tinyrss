@@ -11,6 +11,7 @@ import { useLoading } from '../../composables/useLoading'
 import type { Feed } from '../../types/models'
 import pkg from '../../../package.json'
 import Button from '../shared/Button.vue'
+import AppMark from '../shared/AppMark.vue'
 import Badge from '../shared/Badge.vue'
 import Tooltip from '../shared/Tooltip.vue'
 import ConfirmDialog from '../shared/ConfirmDialog.vue'
@@ -246,7 +247,7 @@ const refreshPercent = computed(() => {
       <Button variant="ghost" size="sm" title="Close menu" class="feeds__close" @click="emit('close')">
         <span aria-hidden="true" class="i-lucide-chevron-left text-[16px]" />
       </Button>
-      <span class="brand"><span aria-hidden="true" class="i-lucide-rss text-[16px]" /> TinyRSS</span>
+      <span class="brand"><AppMark :size="16" /> TinyRSS</span>
       <div class="feeds__actions">
         <Button variant="ghost" size="sm" :disabled="feeds.state.refresh.running" title="Refresh all feeds" @click="refreshAll">
           <span aria-hidden="true" class="i-lucide-refresh-cw text-[16px]" :class="{ spin: feeds.state.refresh.running }" />

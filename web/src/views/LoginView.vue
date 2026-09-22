@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useStore } from '../store'
 import { useApiToast } from '../api/useApiToast'
 import LoginForm from '../components/shared/LoginForm.vue'
+import AppMark from '../components/shared/AppMark.vue'
 
 const { auth } = useStore()
 const router = useRouter()
@@ -30,7 +31,7 @@ function onLogin(token: string) {
 <template>
   <main class="login">
     <div class="login__card">
-      <div class="login__brand"><span aria-hidden="true" class="i-lucide-rss text-[22px]" /> TinyRSS</div>
+      <div class="login__brand"><AppMark :size="22" /> TinyRSS</div>
       <p class="login__hint">
         This instance is protected by an access token. Paste it below to sign in.
       </p>

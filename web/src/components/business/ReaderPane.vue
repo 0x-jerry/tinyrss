@@ -15,6 +15,7 @@ import ReaderContent from './ReaderContent.vue'
 
 export interface ReaderPaneEmits {
   openList: []
+  selectFeed: [feedId: number]
 }
 
 const emit = defineEmits<ReaderPaneEmits>()
@@ -47,6 +48,12 @@ const feed = computed(() => {
   if (!d) return null
   return feedsTree.state.feeds.find((f) => f.id === d.feed_id) ?? null
 })
+
+// Clicking the feed title selects that feed (its article list becomes the scope).
+function onFeedTitleClick() {
+  const id = feed.value?.id
+  if (id != null) emit('selectFeed', id)
+}
 const kind = computed(() => renderKind(feed.value?.render_mode ?? 0, detail.value?.url ?? null))
 
 // Feed content is ONLY ever rendered DOMPurify-sanitized; everything else is Vue-escaped.
@@ -211,6 +218,7 @@ function openUrl() {
         :author="detail.author"
         :published-label="publishedLabel"
         :loading="loading"
+        @feed-title-click="onFeedTitleClick"
       />
       <div v-else-if="contentMsg" class="reader__msg">{{ contentMsg }}</div>
     </template>

@@ -10,7 +10,12 @@ export interface ReaderContentProps {
   loading?: boolean
 }
 
+export interface ReaderContentEmits {
+  feedTitleClick: []
+}
+
 const props = defineProps<ReaderContentProps>()
+const emit = defineEmits<ReaderContentEmits>()
 
 const root = ref<HTMLElement | null>(null)
 
@@ -29,7 +34,15 @@ watch(
     <header v-if="title || feedTitle || author || publishedLabel" class="reader-content__head">
       <h1 v-if="title" class="reader-content__title">{{ title }}</h1>
       <div v-if="feedTitle || author || publishedLabel" class="reader-content__meta">
-        <span v-if="feedTitle">{{ feedTitle }}</span>
+        <button
+          v-if="feedTitle"
+          type="button"
+          class="reader-content__feed"
+          title="Reveal feed in sidebar"
+          @click="emit('feedTitleClick')"
+        >
+          {{ feedTitle }}
+        </button>
         <span v-if="author"> · {{ author }}</span>
         <span v-if="publishedLabel"> · {{ publishedLabel }}</span>
       </div>
@@ -69,6 +82,25 @@ watch(
   margin-top: 8px;
   font-size: 13px;
   color: var(--text-faint);
+}
+.reader-content__feed {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-faint);
+  cursor: pointer;
+  vertical-align: baseline;
+}
+.reader-content__feed:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.reader-content__feed:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 .reader-content__body > :first-child {
   margin-top: 0;

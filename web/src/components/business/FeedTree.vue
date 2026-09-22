@@ -111,6 +111,23 @@ watch(
   },
 )
 
+// Scroll the feed tree so the given feed's row is visible: expand its container
+// first (a collapsed folder/group has no rendered row), clearing a name search
+// that would otherwise hide it. Used when selecting a feed from the reader.
+function scrollToFeed(feedId: number | null) {
+  if (feedId == null) return
+  const feed = feeds.state.feeds.find((f) => f.id === feedId)
+  if (!feed) return
+  if (search.value.trim()) search.value = ''
+  if (feed.folder_id != null && isCollapsed(feed.folder_id)) toggleFolder(feed.folder_id)
+  else if (feed.folder_id == null && uncategorizedCollapsed.value) toggleUncategorized()
+  nextTick(() => {
+    treeRef.value?.querySelector<HTMLElement>('.row--feed.active')?.scrollIntoView({ block: 'nearest' })
+  })
+}
+
+defineExpose({ scrollToFeed })
+
 const addFolder = useLoading(async () => {
   const name = newFolderName.value.trim()
   if (!name) return

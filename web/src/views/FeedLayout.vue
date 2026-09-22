@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useIntervalFn, useMediaQuery } from '@vueuse/core'
 import { injectFeedsTree } from '../providers/feedsTree'
 import { injectSelection } from '../providers/selection'
@@ -16,6 +16,16 @@ const items = injectItems()
 const toast = useApiToast()
 const nav = useViewNav(selection)
 const isMobile = useMediaQuery('(max-width: 768px)')
+
+const feedTreeRef = ref<InstanceType<typeof FeedTree> | null>(null)
+
+// Clicking a feed name in the reader selects that feed, opens its list, and
+// scrolls the feed tree to the selected feed's row.
+function selectFeedFromReader(feedId: number) {
+  selection.selectFeed(feedId)
+  feedTreeRef.value?.scrollToFeed(feedId)
+  openScopeList()
+}
 
 // Which pane is full-screen on mobile comes from the URL, so the browser
 // back/forward buttons move between screens. Desktop shows all three panes.
@@ -111,6 +121,7 @@ useIntervalFn(
 <template>
   <main class="layout">
     <FeedTree
+      ref="feedTreeRef"
       class="pane"
       :class="{ 'pane--active': screen === 'feeds' }"
       :active="screen === 'feeds'"
@@ -128,6 +139,7 @@ useIntervalFn(
       class="pane"
       :class="{ 'pane--active': screen === 'reader' }"
       @open-list="closeReader"
+      @select-feed="selectFeedFromReader"
     />
   </main>
 </template>

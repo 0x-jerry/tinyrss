@@ -25,7 +25,6 @@ export interface FeedTreeProps {
 }
 
 export interface FeedTreeEmits {
-  openList: []
   close: []
 }
 
@@ -157,11 +156,9 @@ async function doDelete() {
   const target = pendingDelete.value
   if (!target) return
   try {
-    let cleared = false
     if (target.kind === 'feed') {
       if (nav.state.feedId === target.id) {
         nav.selectFeed(null)
-        cleared = true
       }
       await feeds.deleteFeed(target.id)
     } else {
@@ -169,9 +166,6 @@ async function doDelete() {
     }
     toast.success(target.kind === 'feed' ? 'Feed deleted' : 'Folder deleted')
     pendingDelete.value = null
-    // The selected feed no longer exists: point the URL back at the
-    // All-articles scope instead of a now-invalid id.
-    if (cleared) emit('openList')
   } catch (e) {
     toast.fromError(e)
     throw e
@@ -180,12 +174,10 @@ async function doDelete() {
 
 function selectAll() {
   nav.clear()
-  emit('openList')
 }
 
 function selectFeed(id: number) {
   nav.selectFeed(id)
-  emit('openList')
 }
 
 function onDragStart(feed: Feed) {

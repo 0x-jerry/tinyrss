@@ -1,5 +1,5 @@
 import { reactive, readonly, ref, type Ref, watch } from 'vue'
-import { createSharedComposable } from '@vueuse/core'
+import { createSharedComposable, useMediaQuery } from '@vueuse/core'
 import { useRoute, useRouter, type LocationQuery } from 'vue-router'
 
 export type MobileScreen = 'feeds' | 'list' | 'reader'
@@ -105,6 +105,7 @@ export const useViewNav = createSharedComposable((): ViewNav => {
   // route would race an in-flight push and drop the screen when an item change
   // is written right after opening the reader.
   const screen = ref<MobileScreen>(parseView(route.query).view)
+  const isMobile = useMediaQuery('(max-width: 768px)')
 
   function buildQuery(patch: Partial<ViewState> = {}): LocationQuery {
     return mergeQuery(route.query, {
@@ -174,12 +175,41 @@ export const useViewNav = createSharedComposable((): ViewNav => {
     }
   }
 
+  // Selecting a scope is one gesture: commit the selection, then open the list.
+  // On mobile, picking a *different* feed first swaps the current entry for the
+  // feeds screen (back from the list returns to feeds); re-selecting the current
+  // feed, e.g. its name in the reader, skips that detour. Desktop just pushes
+  // the new scope — its list is always visible.
+  function openScope(previousFeedId: number | null) {
+    const feedId = state.feedId
+    const scope: Partial<ViewState> = { feedId }
+
+    if (isMobile.value && previousFeedId !== feedId) {
+      replace({ ...scope, view: 'feeds' })
+    }
+
+    const patch: Partial<ViewState> = { ...scope }
+    if (isMobile.value) patch.view = 'list'
+    push(patch)
+  }
+
+  function selectFeed(id: number | null) {
+    const previousFeedId = state.feedId
+    commit({ feedId: id }, true)
+    openScope(previousFeedId)
+  }
+  function clearView() {
+    const previousFeedId = state.feedId
+    commit({ feedId: null, itemId: null }, true)
+    openScope(previousFeedId)
+  }
+
   return {
     state: readonly(state),
     screen: readonly(screen),
-    selectFeed: (id) => commit({ feedId: id }, true),
+    selectFeed,
     selectItem: (id) => commit({ itemId: id }, false),
-    clear: () => commit({ feedId: null, itemId: null }, true),
+    clear: clearView,
     onScopeChange: (fn) => {
       onScope = fn
     },

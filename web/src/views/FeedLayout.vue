@@ -18,7 +18,6 @@ const feedTreeRef = ref<InstanceType<typeof FeedTree> | null>(null)
 function selectFeedFromReader(feedId: number) {
   nav.selectFeed(feedId)
   feedTreeRef.value?.scrollToFeed(feedId)
-  openScopeList()
 }
 
 // Which pane is full-screen on mobile comes from the URL, so the browser
@@ -48,26 +47,6 @@ onMounted(async () => {
     toast.fromError(e)
   }
 })
-
-// Scope changes and mobile screen transitions push a history entry (back works),
-// so the selected feed/folder and the open screen both become shareable links.
-async function openScopeList() {
-  const feedId = nav.state.feedId
-  const scope: Partial<ViewState> = { feedId, itemId: null }
-  if (isMobile.value && feedId != null) {
-    // Selecting a scope on mobile moves through the feeds screen first: replace
-    // the current feeds entry with the chosen feed/folder so it survives as the
-    // previous entry (back from the list returns to feeds), then push the list.
-    // The replace must settle before the push — an overlapping push would cancel
-    // it and collapse the two steps into one.
-    await nav.replace({ ...scope, view: 'feeds' })
-    nav.push({ ...scope, view: 'list' })
-    return
-  }
-  const patch: Partial<ViewState> = { ...scope }
-  if (isMobile.value) patch.view = 'list'
-  nav.push(patch)
-}
 
 function openFeeds() {
   nav.push({ view: 'feeds' })
@@ -116,7 +95,6 @@ useIntervalFn(
       class="pane"
       :class="{ 'pane--active': screen === 'feeds' }"
       :active="screen === 'feeds'"
-      @open-list="openScopeList"
       @close="closeFeeds"
     />
     <ArticleList

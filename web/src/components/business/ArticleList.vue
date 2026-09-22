@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useVirtualList, useIntersectionObserver } from '@vueuse/core'
 import { injectItems, type Filter } from '../../providers/items'
 import { injectFeedsTree } from '../../providers/feedsTree'
@@ -15,11 +15,17 @@ const feeds = injectFeedsTree()
 const selection = injectSelection()
 const toast = useApiToast()
 
+export interface ArticleListProps {
+  /** Whether this pane is the active full-screen view (mobile screen == list). */
+  active?: boolean
+}
+
 export interface ArticleListEmits {
   openFeeds: []
   openReader: []
 }
 
+const props = defineProps<ArticleListProps>()
 const emit = defineEmits<ArticleListEmits>()
 
 const ITEM_HEIGHT = 64
@@ -33,7 +39,26 @@ const search = ref('')
 const loadTrigger = ref<HTMLElement | null>(null)
 
 const source = computed<Item[]>(() => items.state.items)
-const { list: rows, containerProps, wrapperProps } = useVirtualList(source, { itemHeight: ITEM_HEIGHT })
+const { list: rows, containerProps, wrapperProps, scrollTo } = useVirtualList(source, { itemHeight: ITEM_HEIGHT })
+
+// When the list pane becomes the active mobile screen again (returning from the
+// reader/feeds), keep the currently selected article in view. The active row may
+// be off-screen after paging in the reader, and may not even be rendered until
+// the virtual list scrolls to it.
+function scrollToActive() {
+  const id = selection.state.itemId
+  if (id == null) return
+  const idx = source.value.findIndex((i) => i.id === id)
+  if (idx === -1) return
+  nextTick(() => scrollTo(idx, { block: 'center' }))
+}
+// Scroll when the list pane becomes the active mobile screen (returning from the
+// reader/feeds) or when the selected article changes while the list is shown
+// (reader nav, j/k). Gating on props.active skips mobile reader-side item changes,
+// where the list pane is hidden.
+watch([() => props.active, () => selection.state.itemId], () => {
+  if (props.active) scrollToActive()
+})
 
 useIntersectionObserver(loadTrigger, ([entry]) => {
   if (entry.isIntersecting) items.nextPage().catch(() => {})

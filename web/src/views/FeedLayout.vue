@@ -84,7 +84,12 @@ function openReader() {
 }
 
 function closeReader() {
-  nav.back({ view: 'list', itemId: selection.state.itemId })
+  // Reopen the *current* article in the list, not the one that was selected when
+  // the reader was opened. Backing out would pop the stale list entry (which still
+  // carries that earlier itemId), so the returned list would highlight the previous
+  // article. Pushing the list with the live itemId keeps the current article active
+  // and lets back return to the reader.
+  nav.push({ view: 'list', itemId: selection.state.itemId })
 }
 
 function closeFeeds() {
@@ -122,6 +127,7 @@ useIntervalFn(
     <ArticleList
       class="pane"
       :class="{ 'pane--active': screen === 'list' }"
+      :active="screen === 'list'"
       @open-feeds="openFeeds"
       @open-reader="openReader"
     />

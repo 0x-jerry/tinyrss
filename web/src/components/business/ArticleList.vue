@@ -9,6 +9,7 @@ import Button from '../shared/Button.vue'
 import EmptyState from '../shared/EmptyState.vue'
 import { useApiToast } from '../../api/useApiToast'
 import { useLoading } from '../../composables/useLoading'
+import { nearestScrollTop } from '../../utils/scrollIntoViewNearest'
 
 const items = injectItems()
 const feeds = injectFeedsTree()
@@ -39,18 +40,23 @@ const search = ref('')
 const loadTrigger = ref<HTMLElement | null>(null)
 
 const source = computed<Item[]>(() => items.state.items)
-const { list: rows, containerProps, wrapperProps, scrollTo } = useVirtualList(source, { itemHeight: ITEM_HEIGHT })
+const { list: rows, containerProps, wrapperProps } = useVirtualList(source, { itemHeight: ITEM_HEIGHT })
 
 // When the list pane becomes the active mobile screen again (returning from the
 // reader/feeds), keep the currently selected article in view. The active row may
-// be off-screen after paging in the reader, and may not even be rendered until
-// the virtual list scrolls to it.
-function scrollToActive() {
+// be off-screen after paging in the reader. Rows are fixed-height, so visibility
+// is computed numerically without needing the virtual list to have rendered it;
+// only scroll when the row is out of view, aligning to the near edge.
+async function scrollToActive() {
+  await nextTick()
   const id = selection.state.itemId
   if (id == null) return
   const idx = source.value.findIndex((i) => i.id === id)
   if (idx === -1) return
-  nextTick(() => scrollTo(idx, { block: 'center' }))
+  const viewport = containerProps.ref.value
+  if (!viewport) return
+  const target = nearestScrollTop(idx * ITEM_HEIGHT, ITEM_HEIGHT, viewport.scrollTop, viewport.clientHeight)
+  if (target !== viewport.scrollTop) viewport.scrollTop = target
 }
 // Scroll when the list pane becomes the active mobile screen (returning from the
 // reader/feeds) or when the selected article changes while the list is shown

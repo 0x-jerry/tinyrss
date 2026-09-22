@@ -7,8 +7,7 @@ local SQLite database. Classic 3-pane web UI: feeds/folders tree · article list
 
 ## Features
 
-- Classic 3-pane web UI: feeds/folders tree · article list · reading view, with
-  keyboard shortcuts (`j`/`k` navigate, `m` toggle read)
+- Classic 3-pane web UI: feeds/folders tree · article list · reading view
 - Add/rename/delete feeds and folders, unread badges and totals
 - Subscribe by a single URL (with feed autodiscovery) and auto-fill feed details via **Detect**
 - Background polling with conditional GET (304 → skip); configurable auto-refresh interval

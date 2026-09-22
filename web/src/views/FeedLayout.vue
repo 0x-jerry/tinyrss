@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { onKeyStroke, useIntervalFn, useMediaQuery } from '@vueuse/core'
+import { useIntervalFn, useMediaQuery } from '@vueuse/core'
 import { injectFeedsTree } from '../providers/feedsTree'
 import { injectSelection } from '../providers/selection'
 import { injectItems } from '../providers/items'
 import { useApiToast } from '../api/useApiToast'
-import { useItemNav } from '../composables/useItemNav'
 import { useViewNav, type ViewState } from '../composables/useViewNav'
 import FeedTree from '../components/business/FeedTree.vue'
 import ArticleList from '../components/business/ArticleList.vue'
@@ -15,7 +14,6 @@ const feeds = injectFeedsTree()
 const selection = injectSelection()
 const items = injectItems()
 const toast = useApiToast()
-const { move } = useItemNav(items, selection)
 const nav = useViewNav(selection)
 const isMobile = useMediaQuery('(max-width: 768px)')
 
@@ -100,15 +98,6 @@ function closeFeeds() {
   nav.back({ view: 'list' })
 }
 
-async function toggleRead() {
-  const id = selection.state.itemId
-  if (id == null) return
-  await items.toggleRead(id)
-}
-
-onKeyStroke('j', () => move(1))
-onKeyStroke('k', () => move(-1))
-onKeyStroke('m', toggleRead)
 useIntervalFn(
   () => {
     feeds.reload()

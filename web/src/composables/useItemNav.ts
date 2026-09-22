@@ -1,8 +1,8 @@
 import type { ItemsProvider } from '../providers/items'
 import type { SelectionProvider } from '../providers/selection'
 
-// Shared step navigation over the currently loaded list, backing both the j/k
-// keyboard shortcuts (FeedLayout) and the reader toolbar's prev/next buttons.
+// Shared step navigation over the currently loaded list, backing the reader
+// toolbar's prev/next buttons.
 export function useItemNav(items: ItemsProvider, selection: SelectionProvider) {
   async function move(step: number) {
     const list = items.state.items

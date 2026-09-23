@@ -213,7 +213,6 @@ describe('items provider', () => {
   })
 
   it('openItem marks read optimistically and decrements the feed badge', async () => {
-    vi.mocked(api.getItem).mockResolvedValue({ ...item(1), summary: '', content: '' })
     const p = createItemsStore({ getSelection: () => selection, onItemsChanged, adjustUnread })
     await p.load()
     await p.openItem(p.state.items[0].id)
@@ -221,12 +220,25 @@ describe('items provider', () => {
     expect(adjustUnread).toHaveBeenCalledWith(1, -1)
   })
 
+  it('openItem selects synchronously', async () => {
+    const selectItem = vi.fn()
+    const p = createItemsStore({ getSelection: () => selection, selectItem })
+    await p.load()
+    await p.openItem(p.state.items[0].id)
+    expect(selectItem).toHaveBeenCalledWith(1)
+  })
+
   it('openItem skips unread updates when the item is already read', async () => {
     const actions: string[] = []
     vi.mocked(api.setItemState).mockImplementation(async (_id: number, action: string) => {
       actions.push(action)
     })
-    vi.mocked(api.getItem).mockResolvedValue({ ...item(1), is_read: true, summary: '', content: '' })
+    vi.mocked(api.listItems).mockResolvedValue({
+      items: [{ ...item(1), is_read: true }],
+      total: 1,
+      page: 1,
+      limit: 50,
+    } as ItemsResponse)
     const p = createItemsStore({ getSelection: () => selection, onItemsChanged, adjustUnread })
     await p.load()
     await p.openItem(p.state.items[0].id)

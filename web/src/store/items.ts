@@ -1,7 +1,7 @@
 import { reactive, readonly } from 'vue'
 import { useLocalStorage } from '@vueuse/core'
 import { api } from '../api/endpoints'
-import type { Item, ItemDetail } from '../types/models'
+import type { Item } from '../types/models'
 
 export type Filter = 'all' | 'unread' | 'starred'
 
@@ -42,7 +42,6 @@ export interface ItemsState {
   loading: boolean
   filter: Filter
   search: string
-  selectedItem: ItemDetail | null
 }
 
 export interface ItemsDeps {
@@ -109,7 +108,6 @@ export function createItemsStore(deps: ItemsDeps): ItemsStore {
       return f && FILTERS.includes(f) ? f : 'unread'
     },
     search: '',
-    selectedItem: null,
   })
 
   function notify() {
@@ -141,7 +139,6 @@ export function createItemsStore(deps: ItemsDeps): ItemsStore {
   function patch(id: number, patch: Partial<Item>) {
     const item = raw.items.find((i) => i.id === id)
     if (item) Object.assign(item, patch)
-    if (raw.selectedItem?.id === id) Object.assign(raw.selectedItem, patch)
   }
 
   // Every read/star mutation goes through these two: optimistic patch (plus a
@@ -180,16 +177,13 @@ export function createItemsStore(deps: ItemsDeps): ItemsStore {
       await fetchPage(1, true)
     },
     openItem: async (id) => {
-      // select + open in a single action: selecting drives the highlight/persist,
-      // then the detail is fetched and marked read optimistically.
+      // select + open in a single action: selecting drives the highlight/persist
+      // synchronously. The article detail is fetched by the reader pane from the
+      // selected id; here we only mark the list item read optimistically.
       deps.selectItem?.(id)
-      const detail = await api.getItem(id)
-      raw.selectedItem = detail
-
-      if (detail.is_read) return
-      patch(id, { is_read: true })
-      deps.adjustUnread?.(detail.feed_id, -1)
-      await api.setItemState(id, 'read')
+      const item = findItem(id)
+      if (!item || item.is_read) return
+      await setItemRead(id, true)
     },
     toggleRead: async (id) => {
       const item = findItem(id)

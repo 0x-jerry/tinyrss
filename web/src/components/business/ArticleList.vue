@@ -69,8 +69,10 @@ useIntersectionObserver(loadTrigger, async ([entry]) => {
   if (entry.isIntersecting) await items.nextPage()
 })
 
-async function select(item: Item) {
-  await items.openItem(item.id)
+function select(item: Item) {
+  // Open the reader immediately (openItem commits the selection synchronously),
+  // then let the detail fetch fill it in behind the reader's loading overlay.
+  items.openItem(item.id).catch((e) => toast.fromError(e))
   emit('openReader')
 }
 

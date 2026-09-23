@@ -6,7 +6,9 @@ import { useStore } from '../../store'
 import { useViewNav } from '../../composables/useViewNav'
 import { useApiToast } from '../../api/useApiToast'
 import { api } from '../../api/endpoints'
+import { ApiError } from '../../api/client'
 import { renderKind } from '../../helpers'
+import type { ItemDetail } from '../../types/models'
 import Button from '../shared/Button.vue'
 import EmptyState from '../shared/EmptyState.vue'
 import ReaderContent from './ReaderContent.vue'
@@ -30,10 +32,62 @@ async function move(step: number) {
   await items.openItem(list[next].id)
 }
 
-const detail = computed(() => items.state.selectedItem)
-
-const listItem = computed(() =>
+const currentListItem = computed(() =>
   nav.state.itemId == null ? null : items.state.items.find((i) => i.id === nav.state.itemId) ?? null,
+)
+
+interface ReaderData {
+  detail: ItemDetail | null
+  html: string
+}
+
+const EMPTY_READER: ReaderData = { detail: null, html: '' }
+
+const loading = ref(false)
+const error = ref<string | null>(null)
+
+// Article content is derived from the selected id in a single request: the detail
+// always, plus the server-rendered body when the feed uses server mode. It
+// re-evaluates (cancelling any stale request) when the article or its feed's
+// render mode changes, and `evaluating` drives the reader's loading overlay. A
+// stale (404) id is dropped so it isn't re-fetched on every load.
+const fetched = computedAsync<ReaderData>(
+  async (onCancel) => {
+    const itemId = nav.state.itemId
+    // Snapshot feed render modes before awaiting: reactive reads after an await
+    // are not tracked, so this keeps a feed's mode change re-running the fetch.
+    const renderModes = new Map(feedsTree.state.feeds.map((f) => [f.id, f.render_mode]))
+    error.value = null
+    if (itemId == null) return EMPTY_READER
+    let cancelled = false
+    onCancel(() => {
+      cancelled = true
+    })
+    try {
+      const detail = await api.getItem(itemId)
+      if (cancelled) return EMPTY_READER
+      let html = ''
+      if (renderKind(renderModes.get(detail.feed_id) ?? 0, detail.url) === 'server') {
+        try {
+          html = await api.renderItem(itemId)
+        } catch (e) {
+          if (!cancelled) {
+            error.value = e instanceof Error ? e.message : String(e)
+            toast.fromError(e)
+          }
+        }
+      }
+      return { detail, html: cancelled ? '' : html }
+    } catch (e) {
+      if (cancelled) return EMPTY_READER
+      error.value = e instanceof Error ? e.message : String(e)
+      toast.fromError(e)
+      if (e instanceof ApiError && e.status === 404) nav.selectItem(null)
+      return EMPTY_READER
+    }
+  },
+  EMPTY_READER,
+  { evaluating: loading },
 )
 
 // Previous/next article in the loaded list, for the mobile bottom nav bar.
@@ -48,7 +102,7 @@ const neighbors = computed(() => {
 })
 
 const feed = computed(() => {
-  const d = detail.value
+  const d = currentListItem.value
   if (!d) return null
   return feedsTree.state.feeds.find((f) => f.id === d.feed_id) ?? null
 })
@@ -58,64 +112,26 @@ function onFeedTitleClick() {
   const id = feed.value?.id
   if (id != null) emit('selectFeed', id)
 }
-const kind = computed(() => renderKind(feed.value?.render_mode ?? 0, detail.value?.url ?? null))
-
-// Feed content is ONLY ever rendered DOMPurify-sanitized; everything else is Vue-escaped.
-const safeHtml = computed(() => {
-  const d = detail.value
-  if (!d) return ''
-  return DOMPurify.sanitize(d.content || d.summary || '')
-})
+const kind = computed(() => renderKind(feed.value?.render_mode ?? 0, currentListItem.value?.url ?? null))
 
 const publishedLabel = computed(() => {
-  const iso = detail.value?.published_at
+  const iso = currentListItem.value?.published_at
   if (!iso) return ''
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 })
 
-// Server-mode HTML is a derived value: it re-evaluates (cancelling any stale
-// request) whenever the article or its render kind changes.
-const serverLoading = ref(false)
-const serverError = ref<string | null>(null)
-const serverHtml = computedAsync(
-  async (onCancel) => {
-    const itemId = kind.value === 'server' ? detail.value?.id : null
-    serverError.value = null
-    if (itemId == null) return ''
-    let cancelled = false
-    onCancel(() => {
-      cancelled = true
-    })
-    try {
-      const html = await api.renderItem(itemId)
-      return cancelled ? '' : html
-    } catch (e) {
-      if (cancelled) return ''
-      serverError.value = e instanceof Error ? e.message : String(e)
-      return ''
-    }
-  },
-  '',
-  { evaluating: serverLoading },
-)
-
-// Server HTML was previously isolated inside a sandboxed iframe; rendered inline
-// it must be DOMPurify-sanitized too (which also strips the backend's doc wrapper).
-const safeServerHtml = computed(() => (serverHtml.value ? DOMPurify.sanitize(serverHtml.value) : ''))
-
-const contentHtml = computed(() => (kind.value === 'server' ? safeServerHtml.value : safeHtml.value))
-
-const loading = computed(() => kind.value === 'server' && serverLoading.value)
+// Feed content is ONLY ever rendered DOMPurify-sanitized; everything else is Vue-escaped.
+const contentHtml = computed(() => {
+  const { detail, html } = fetched.value
+  const raw = kind.value === 'server' ? html : detail?.content || detail?.summary || ''
+  return raw ? DOMPurify.sanitize(raw) : ''
+})
 
 const contentMsg = computed(() => {
-  if (kind.value === 'server') {
-    if (serverError.value) return serverError.value
-    if (loading.value) return ''
-    return 'No content for this article.'
-  }
-  return 'No content for this article.'
+  if (error.value) return error.value
+  return loading.value ? '' : 'No content for this article.'
 })
 
 async function toggleRead() {
@@ -140,7 +156,7 @@ async function toggleStar() {
 
 async function onModeChange(e: Event) {
   const mode = Number((e.target as HTMLSelectElement).value)
-  if (!detail.value || !feed.value) return
+  if (!currentListItem.value || !feed.value) return
   try {
     await feedsTree.setRenderMode(feed.value.id, mode)
   } catch (err) {
@@ -149,7 +165,7 @@ async function onModeChange(e: Event) {
 }
 
 function openUrl() {
-  const url = detail.value?.url
+  const url = currentListItem.value?.url
   if (!url) return
   window.open(url, '_blank', 'noopener,noreferrer')
 }
@@ -157,75 +173,73 @@ function openUrl() {
 
 <template>
   <section class="reader">
-    <template v-if="detail">
-      <header class="reader__head">
-        <div class="reader__actions">
-          <Button variant="ghost" size="sm" title="Back to list" class="reader__close" @click="emit('openList')">
+    <header class="reader__head">
+      <div class="reader__actions">
+        <Button variant="ghost" size="sm" title="Back to list" class="reader__close" @click="emit('openList')">
+          <span aria-hidden="true" class="i-lucide-chevron-left text-[16px]" />
+        </Button>
+        <div class="reader__head-nav">
+          <Button variant="ghost" size="sm" title="Previous" @click="move(-1)">
             <span aria-hidden="true" class="i-lucide-chevron-left text-[16px]" />
           </Button>
-          <div class="reader__head-nav">
-            <Button variant="ghost" size="sm" title="Previous" @click="move(-1)">
-              <span aria-hidden="true" class="i-lucide-chevron-left text-[16px]" />
-            </Button>
-            <Button variant="ghost" size="sm" title="Next" @click="move(1)">
-              <span aria-hidden="true" class="i-lucide-chevron-right text-[16px]" />
-            </Button>
-          </div>
-          <Button variant="ghost" size="sm" :title="listItem?.is_read ? 'Mark unread' : 'Mark read'" @click="toggleRead">
-            <span aria-hidden="true" class="i-lucide-check text-[16px]" /> {{ listItem?.is_read ? 'Unread' : 'Read' }}
-          </Button>
-          <Button variant="ghost" size="sm" :title="listItem?.is_starred ? 'Unstar' : 'Star'" @click="toggleStar">
-            <span aria-hidden="true" class="i-lucide-star text-[16px]" :class="{ starred: listItem?.is_starred }" />
-          </Button>
-          <select
-            class="reader__mode"
-            :value="feed?.render_mode ?? 0"
-            :disabled="!detail || !feed"
-            title="Render mode"
-            @change="onModeChange"
-          >
-            <option :value="0">Content</option>
-            <option :value="2">Server</option>
-          </select>
-          <Button v-if="detail.url" variant="ghost" size="sm" title="Open in new window" @click="openUrl">
-            <span aria-hidden="true" class="i-lucide-external-link text-[16px]" />
+          <Button variant="ghost" size="sm" title="Next" @click="move(1)">
+            <span aria-hidden="true" class="i-lucide-chevron-right text-[16px]" />
           </Button>
         </div>
-      </header>
-      <div class="reader__nav" role="navigation" aria-label="Article navigation">
-        <button
-          type="button"
-          class="reader__nav-btn reader__nav-btn--prev"
-          :disabled="!neighbors.prev"
-          :title="neighbors.prev?.title ?? 'Previous article'"
-          @click="move(-1)"
+        <Button variant="ghost" size="sm" :title="currentListItem?.is_read ? 'Mark unread' : 'Mark read'" @click="toggleRead">
+          <span aria-hidden="true" class="i-lucide-check text-[16px]" /> {{ currentListItem?.is_read ? 'Unread' : 'Read' }}
+        </Button>
+        <Button variant="ghost" size="sm" :title="currentListItem?.is_starred ? 'Unstar' : 'Star'" @click="toggleStar">
+          <span aria-hidden="true" class="i-lucide-star text-[16px]" :class="{ starred: currentListItem?.is_starred }" />
+        </Button>
+        <select
+          class="reader__mode"
+          :value="feed?.render_mode ?? 0"
+          :disabled="!currentListItem || !feed"
+          title="Render mode"
+          @change="onModeChange"
         >
-          <span aria-hidden="true" class="i-lucide-chevron-left" />
-          <span class="reader__nav-label">{{ neighbors.prev?.title ?? 'Previous' }}</span>
-        </button>
-        <button
-          type="button"
-          class="reader__nav-btn reader__nav-btn--next"
-          :disabled="!neighbors.next"
-          :title="neighbors.next?.title ?? 'Next article'"
-          @click="move(1)"
-        >
-          <span class="reader__nav-label">{{ neighbors.next?.title ?? 'Next' }}</span>
-          <span aria-hidden="true" class="i-lucide-chevron-right" />
-        </button>
+          <option :value="0">Content</option>
+          <option :value="2">Server</option>
+        </select>
+        <Button v-if="currentListItem?.url" variant="ghost" size="sm" title="Open in new window" @click="openUrl">
+          <span aria-hidden="true" class="i-lucide-external-link text-[16px]" />
+        </Button>
       </div>
-      <ReaderContent
-        v-if="contentHtml || loading"
-        :html="contentHtml"
-        :title="detail.title"
-        :feed-title="detail.feed_title"
-        :author="detail.author"
-        :published-label="publishedLabel"
-        :loading="loading"
-        @feed-title-click="onFeedTitleClick"
-      />
-      <div v-else-if="contentMsg" class="reader__msg">{{ contentMsg }}</div>
-    </template>
+    </header>
+    <div class="reader__nav" role="navigation" aria-label="Article navigation">
+      <button
+        type="button"
+        class="reader__nav-btn reader__nav-btn--prev"
+        :disabled="!neighbors.prev"
+        :title="neighbors.prev?.title ?? 'Previous article'"
+        @click="move(-1)"
+      >
+        <span aria-hidden="true" class="i-lucide-chevron-left" />
+        <span class="reader__nav-label">{{ neighbors.prev?.title ?? 'Previous' }}</span>
+      </button>
+      <button
+        type="button"
+        class="reader__nav-btn reader__nav-btn--next"
+        :disabled="!neighbors.next"
+        :title="neighbors.next?.title ?? 'Next article'"
+        @click="move(1)"
+      >
+        <span class="reader__nav-label">{{ neighbors.next?.title ?? 'Next' }}</span>
+        <span aria-hidden="true" class="i-lucide-chevron-right" />
+      </button>
+    </div>
+    <ReaderContent
+      v-if="contentHtml || loading"
+      :html="contentHtml"
+      :title="currentListItem?.title"
+      :feed-title="currentListItem?.feed_title"
+      :author="currentListItem?.author"
+      :published-label="publishedLabel"
+      :loading="loading"
+      @feed-title-click="onFeedTitleClick"
+    />
+    <div v-else-if="contentMsg" class="reader__msg">{{ contentMsg }}</div>
     <EmptyState v-else message="Select an article to read it." icon="i-lucide-filter" />
   </section>
 </template>

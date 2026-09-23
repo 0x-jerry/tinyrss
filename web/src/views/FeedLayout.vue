@@ -29,16 +29,11 @@ onMounted(async () => {
     await feeds.reload()
     await items.load()
     // Reopen the article into the reader: on desktop the reader is always
-    // visible; on mobile only when the URL asks for it (a deep link). If the item
-    // no longer exists (a shared link to a deleted/stale article) clear it so the
-    // dead id isn't kept in the URL and re-fetched on every load.
+    // visible; on mobile only when the URL asks for it (a deep link). The reader
+    // pane fetches the detail itself and drops a dead/stale id once it 404s.
     const itemId = nav.state.itemId
     if (itemId != null && (!isMobile.value || nav.screen.value === 'reader')) {
-      try {
-        await items.openItem(itemId)
-      } catch {
-        nav.selectItem(null)
-      }
+      await items.openItem(itemId)
     }
     // Resume a refresh-all that was already running when this page loaded, so
     // its progress bar shows and the tree resyncs when it finishes.

@@ -70,17 +70,9 @@ func (f *Fetcher) clientFor(proxyURL string) (*http.Client, error) {
 	if proxyURL == "" {
 		return f.client, nil
 	}
-	f.proxyMu.Lock()
-	defer f.proxyMu.Unlock()
-	if c, ok := f.proxied[proxyURL]; ok {
-		return c, nil
-	}
-	c, err := newProxiedClient(proxyURL)
-	if err != nil {
-		return nil, err
-	}
-	f.proxied[proxyURL] = c
-	return c, nil
+	return f.proxyPool.get(proxyURL, func() (*http.Client, error) {
+		return newProxiedClient(proxyURL)
+	})
 }
 
 func newProxiedClient(raw string) (*http.Client, error) {

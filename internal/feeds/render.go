@@ -54,7 +54,7 @@ func (f *Fetcher) FetchRender(rawURL, proxyURL string) ([]byte, error) {
 }
 
 func (f *Fetcher) fetchPage(u *url.URL, proxyURL string) ([]byte, error) {
-	client, err := f.clientFor(proxyURL)
+	client, err := f.renderClientFor(proxyURL)
 	if err != nil {
 		return nil, err
 	}

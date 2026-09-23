@@ -45,35 +45,36 @@ type RefreshJob struct {
 // feed via singleflight, and runs a ticker that refreshes due feeds with a
 // bounded worker pool.
 type Fetcher struct {
-	repo      *repository.Repo
-	client    *http.Client
-	ctx       context.Context
-	cancel    context.CancelFunc
-	sf        singleflight.Group
-	renderSf  singleflight.Group
-	sem       chan struct{}
-	renderSem chan struct{}
-	proxyMu   sync.Mutex
-	proxied   map[string]*http.Client
-	stopCh    chan struct{}
-	startOnce sync.Once
-	stopOnce  sync.Once
-	stopWg    sync.WaitGroup
-	refreshWg sync.WaitGroup
-	jobMu     sync.Mutex
-	job       RefreshJob
+	repo       *repository.Repo
+	client     *http.Client
+	ctx        context.Context
+	cancel     context.CancelFunc
+	sf         singleflight.Group
+	renderSf   singleflight.Group
+	sem        chan struct{}
+	renderSem  chan struct{}
+	proxyPool  *clientPool
+	renderPool *clientPool
+	stopCh     chan struct{}
+	startOnce  sync.Once
+	stopOnce   sync.Once
+	stopWg     sync.WaitGroup
+	refreshWg  sync.WaitGroup
+	jobMu      sync.Mutex
+	job        RefreshJob
 }
 
 func NewFetcher(repo *repository.Repo) *Fetcher {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Fetcher{
-		repo:      repo,
-		client:    newHTTPClient(baseTransport()),
-		ctx:       ctx,
-		cancel:    cancel,
-		sem:       make(chan struct{}, workerCount),
-		renderSem: make(chan struct{}, renderWorkers),
-		proxied:   map[string]*http.Client{},
+		repo:       repo,
+		client:     newHTTPClient(baseTransport()),
+		ctx:        ctx,
+		cancel:     cancel,
+		sem:        make(chan struct{}, workerCount),
+		renderSem:  make(chan struct{}, renderWorkers),
+		proxyPool:  newClientPool(),
+		renderPool: newClientPool(),
 	}
 }
 
@@ -151,11 +152,8 @@ func (f *Fetcher) Stop() {
 	})
 	f.stopWg.Wait()
 	f.refreshWg.Wait()
-	f.proxyMu.Lock()
-	for _, c := range f.proxied {
-		c.CloseIdleConnections()
-	}
-	f.proxyMu.Unlock()
+	f.proxyPool.closeIdle()
+	f.renderPool.closeIdle()
 }
 
 // lastFetchedAt parses a feed's recorded fetch time; zero means never fetched.

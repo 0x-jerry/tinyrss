@@ -201,7 +201,12 @@ function dateLabel(iso: string): string {
       </div>
     </header>
 
-    <div v-if="!items.state.items.length && !items.state.loading" class="artlist__empty">
+    <div v-if="items.state.loading && !items.state.items.length" class="artlist__loading" role="status" aria-live="polite">
+      <span aria-hidden="true" class="spin i-lucide-loader-circle" />
+      Loading articles…
+    </div>
+
+    <div v-else-if="!items.state.items.length" class="artlist__empty">
       <EmptyState message="No articles here yet. Add a feed or adjust filters." />
     </div>
 
@@ -380,6 +385,15 @@ function dateLabel(iso: string): string {
 .row__date {
   flex: none;
   white-space: nowrap;
+}
+.artlist__loading {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-faint);
 }
 .artlist__empty {
   flex: 1;

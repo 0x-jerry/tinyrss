@@ -272,108 +272,114 @@ const refreshPercent = computed(() => {
     </div>
 
     <nav ref="treeRef" class="tree">
-      <div class="row row--inbox" :class="{ active: nav.state.feedId === null }" @click="selectAll">
-        <span aria-hidden="true" class="i-lucide-rss text-[16px]" />
-        <span class="row__label">All articles</span>
-        <Badge :count="filteredTree.totalUnread" />
+      <div v-if="feeds.state.loading && !feeds.state.feeds.length" class="tree__loading" role="status" aria-live="polite">
+        <span aria-hidden="true" class="spin i-lucide-loader-circle" />
+        Loading feeds…
       </div>
-
-      <div class="row row--inbox" :class="{ active: route.path === '/stats' }" @click="router.push('/stats')">
-        <span aria-hidden="true" class="i-lucide-chart-line text-[16px]" />
-        <span class="row__label">Statistics</span>
-      </div>
-
-      <section v-for="folder in filteredTree.folderNodes" :key="folder.id" class="folder">
-        <div
-          class="row"
-          :class="{ 'drop-target': dropTarget?.folderId === folder.id }"
-          :title="folderTitle(folder.id)"
-          @click="toggleFolder(folder.id)"
-          @dragover.prevent="onDragOver(folder.id)"
-          @drop="onDrop(folder.id)"
-        >
-          <span
-            aria-hidden="true"
-            class="text-[16px]"
-            :class="folderIcon(folder.id)"
-          />
-          <span class="row__label">{{ folder.name }}</span>
-          <Badge :count="folder.unread" />
-          <button v-if="folder.feeds.length" class="row__act" title="Rename folder" @click.stop="openRenameFolder({ id: folder.id, name: folder.name })">
-            <span aria-hidden="true" class="i-lucide-pencil text-[13px]" />
-          </button>
-          <button class="row__act row__act--danger" title="Delete folder" @click.stop="confirmDelete('folder', folder.id, folder.name)">
-            <span aria-hidden="true" class="i-lucide-trash text-[13px]" />
-          </button>
+      <template v-else>
+        <div class="row row--inbox" :class="{ active: nav.state.feedId === null }" @click="selectAll">
+          <span aria-hidden="true" class="i-lucide-rss text-[16px]" />
+          <span class="row__label">All articles</span>
+          <Badge :count="filteredTree.totalUnread" />
         </div>
-        <div v-if="expanded || !isCollapsed(folder.id)" class="folder__feeds">
-          <Tooltip
-            v-for="feed in folder.feeds"
-            :key="feed.id"
-            :text="feed.fetch_error"
-            :disabled="!feed.fetch_error || isMobile"
+
+        <div class="row row--inbox" :class="{ active: route.path === '/stats' }" @click="router.push('/stats')">
+          <span aria-hidden="true" class="i-lucide-chart-line text-[16px]" />
+          <span class="row__label">Statistics</span>
+        </div>
+
+        <section v-for="folder in filteredTree.folderNodes" :key="folder.id" class="folder">
+          <div
+            class="row"
+            :class="{ 'drop-target': dropTarget?.folderId === folder.id }"
+            :title="folderTitle(folder.id)"
+            @click="toggleFolder(folder.id)"
+            @dragover.prevent="onDragOver(folder.id)"
+            @drop="onDrop(folder.id)"
           >
-            <div
-              class="row row--feed"
-              :class="{ active: nav.state.feedId === feed.id, dragging: draggingFeedId === feed.id }"
-              draggable="true"
-              @click="selectFeed(feed.id)"
-              @dragstart="onDragStart(feed)"
-              @dragend="onDragEnd"
+            <span
+              aria-hidden="true"
+              class="text-[16px]"
+              :class="folderIcon(folder.id)"
+            />
+            <span class="row__label">{{ folder.name }}</span>
+            <Badge :count="folder.unread" />
+            <button v-if="folder.feeds.length" class="row__act" title="Rename folder" @click.stop="openRenameFolder({ id: folder.id, name: folder.name })">
+              <span aria-hidden="true" class="i-lucide-pencil text-[13px]" />
+            </button>
+            <button class="row__act row__act--danger" title="Delete folder" @click.stop="confirmDelete('folder', folder.id, folder.name)">
+              <span aria-hidden="true" class="i-lucide-trash text-[13px]" />
+            </button>
+          </div>
+          <div v-if="expanded || !isCollapsed(folder.id)" class="folder__feeds">
+            <Tooltip
+              v-for="feed in folder.feeds"
+              :key="feed.id"
+              :text="feed.fetch_error"
+              :disabled="!feed.fetch_error || isMobile"
             >
-              <span aria-hidden="true" class="i-lucide-rss text-[14px]" />
-              <span class="row__label row__label--clip">{{ feed.title }}</span>
-              <Badge :count="feed.unread" />
-              <span v-if="feed.fetch_error" class="feed__err" aria-label="Fetch error" />
-              <button class="row__act" title="Edit feed" @click.stop="openEdit(feed)"><span aria-hidden="true" class="i-lucide-pencil text-[13px]" /></button>
-              <button class="row__act row__act--danger" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
-            </div>
-          </Tooltip>
-        </div>
-      </section>
+              <div
+                class="row row--feed"
+                :class="{ active: nav.state.feedId === feed.id, dragging: draggingFeedId === feed.id }"
+                draggable="true"
+                @click="selectFeed(feed.id)"
+                @dragstart="onDragStart(feed)"
+                @dragend="onDragEnd"
+              >
+                <span aria-hidden="true" class="i-lucide-rss text-[14px]" />
+                <span class="row__label row__label--clip">{{ feed.title }}</span>
+                <Badge :count="feed.unread" />
+                <span v-if="feed.fetch_error" class="feed__err" aria-label="Fetch error" />
+                <button class="row__act" title="Edit feed" @click.stop="openEdit(feed)"><span aria-hidden="true" class="i-lucide-pencil text-[13px]" /></button>
+                <button class="row__act row__act--danger" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
+              </div>
+            </Tooltip>
+          </div>
+        </section>
 
-      <section class="folder">
-        <div
-          class="row row--inbox"
-          :class="{ 'drop-target': dropTarget !== null && dropTarget.folderId === null }"
-          :title="uncategorizedFolderTitle()"
-          @click="toggleUncategorized()"
-          @dragover.prevent="onDragOver(null)"
-          @drop="onDrop(null)"
-        >
-          <span
-            aria-hidden="true"
-            class="text-[16px]"
-            :class="uncategorizedFolderIcon()"
-          />
-          <span class="row__label">Uncategorized</span>
-          <Badge :count="filteredTree.uncategorizedUnread" />
-        </div>
-        <div v-if="expanded || !uncategorizedCollapsed" class="folder__feeds">
-          <Tooltip
-            v-for="feed in filteredTree.uncategorized"
-            :key="feed.id"
-            :text="feed.fetch_error"
-            :disabled="!feed.fetch_error || isMobile"
+        <section class="folder">
+          <div
+            class="row row--inbox"
+            :class="{ 'drop-target': dropTarget !== null && dropTarget.folderId === null }"
+            :title="uncategorizedFolderTitle()"
+            @click="toggleUncategorized()"
+            @dragover.prevent="onDragOver(null)"
+            @drop="onDrop(null)"
           >
-            <div
-              class="row row--feed"
-              :class="{ active: nav.state.feedId === feed.id, dragging: draggingFeedId === feed.id }"
-              draggable="true"
-              @click="selectFeed(feed.id)"
-              @dragstart="onDragStart(feed)"
-              @dragend="onDragEnd"
+            <span
+              aria-hidden="true"
+              class="text-[16px]"
+              :class="uncategorizedFolderIcon()"
+            />
+            <span class="row__label">Uncategorized</span>
+            <Badge :count="filteredTree.uncategorizedUnread" />
+          </div>
+          <div v-if="expanded || !uncategorizedCollapsed" class="folder__feeds">
+            <Tooltip
+              v-for="feed in filteredTree.uncategorized"
+              :key="feed.id"
+              :text="feed.fetch_error"
+              :disabled="!feed.fetch_error || isMobile"
             >
-              <span aria-hidden="true" class="i-lucide-rss text-[14px]" />
-              <span class="row__label row__label--clip">{{ feed.title }}</span>
-              <Badge :count="feed.unread" />
-              <span v-if="feed.fetch_error" class="feed__err" aria-label="Fetch error" />
-              <button class="row__act" title="Edit feed" @click.stop="openEdit(feed)"><span aria-hidden="true" class="i-lucide-pencil text-[13px]" /></button>
-              <button class="row__act row__act--danger" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
-            </div>
-          </Tooltip>
-        </div>
-      </section>
+              <div
+                class="row row--feed"
+                :class="{ active: nav.state.feedId === feed.id, dragging: draggingFeedId === feed.id }"
+                draggable="true"
+                @click="selectFeed(feed.id)"
+                @dragstart="onDragStart(feed)"
+                @dragend="onDragEnd"
+              >
+                <span aria-hidden="true" class="i-lucide-rss text-[14px]" />
+                <span class="row__label row__label--clip">{{ feed.title }}</span>
+                <Badge :count="feed.unread" />
+                <span v-if="feed.fetch_error" class="feed__err" aria-label="Fetch error" />
+                <button class="row__act" title="Edit feed" @click.stop="openEdit(feed)"><span aria-hidden="true" class="i-lucide-pencil text-[13px]" /></button>
+                <button class="row__act row__act--danger" title="Delete feed" @click.stop="confirmDelete('feed', feed.id, feed.title)"><span aria-hidden="true" class="i-lucide-trash text-[13px]" /></button>
+              </div>
+            </Tooltip>
+          </div>
+        </section>
+      </template>
     </nav>
 
     <footer class="feeds__footer">
@@ -493,6 +499,15 @@ const refreshPercent = computed(() => {
   flex: 1;
   overflow-y: auto;
   padding: 6px 8px 12px;
+}
+.tree__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 0;
+  font-size: 13px;
+  color: var(--text-faint);
 }
 .row {
   display: flex;

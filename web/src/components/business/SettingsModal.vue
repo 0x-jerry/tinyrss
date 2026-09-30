@@ -6,7 +6,7 @@ import { useApiToast } from '../../api/useApiToast'
 import { useLoading } from '../../composables/useLoading'
 import { api } from '../../api/endpoints'
 import { ApiError } from '../../api/client'
-import { durationToSeconds, secondsToDuration, type DurationUnit } from '../../helpers'
+import { durationToSeconds, formatDateTime, secondsToDuration, type DurationUnit } from '../../helpers'
 import type { FetchLog } from '../../types/models'
 import Modal from '../shared/Modal.vue'
 import Button from '../shared/Button.vue'
@@ -361,7 +361,7 @@ function downloadText(filename: string, text: string, mime: string) {
             <div class="log__body">
               <div class="log__head">
                 <span class="log__feed">{{ log.feed_title }}</span>
-                <span class="log__time">{{ log.fetched_at }}</span>
+                <span class="log__time">{{ formatDateTime(log.fetched_at) }}</span>
               </div>
               <div v-if="!log.success && log.error" class="log__error">{{ log.error }}</div>
             </div>

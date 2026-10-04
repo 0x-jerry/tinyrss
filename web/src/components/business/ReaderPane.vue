@@ -233,6 +233,7 @@ function openUrl() {
       v-if="contentHtml || loading"
       :html="contentHtml"
       :title="currentListItem?.title"
+      :url="currentListItem?.url"
       :feed-title="currentListItem?.feed_title"
       :author="currentListItem?.author"
       :published-label="publishedLabel"

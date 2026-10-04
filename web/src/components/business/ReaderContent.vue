@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { externalUrl } from '../../helpers/externalUrl'
 
 export interface ReaderContentProps {
   html: string
   title?: string
+  url?: string
   feedTitle?: string
   author?: string
   publishedLabel?: string
@@ -19,6 +21,9 @@ const emit = defineEmits<ReaderContentEmits>()
 
 const root = ref<HTMLElement | null>(null)
 
+// The title links to the article's own page in a new tab when that url is usable.
+const titleUrl = computed(() => externalUrl(props.url, window.location.href))
+
 // The same component instance persists across article switches, so reset the
 // scroll position to the top whenever the article content changes.
 watch(
@@ -32,7 +37,12 @@ watch(
 <template>
   <div ref="root" class="reader-content">
     <header v-if="title || feedTitle || author || publishedLabel" class="reader-content__head">
-      <h1 v-if="title" class="reader-content__title">{{ title }}</h1>
+      <h1 v-if="title" class="reader-content__title">
+        <a v-if="titleUrl" class="reader-content__title-link" :href="titleUrl" target="_blank" rel="noopener noreferrer">
+          {{ title }}
+        </a>
+        <template v-else>{{ title }}</template>
+      </h1>
       <div v-if="feedTitle || author || publishedLabel" class="reader-content__meta">
         <button
           v-if="feedTitle"
@@ -77,6 +87,19 @@ watch(
   font-weight: 600;
   line-height: 1.3;
   color: var(--text);
+}
+.reader-content__title-link {
+  color: inherit;
+  text-decoration: none;
+}
+.reader-content__title-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.reader-content__title-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 .reader-content__meta {
   margin-top: 8px;

@@ -15,6 +15,8 @@ local SQLite database. Classic 3-pane web UI: feeds/folders tree · article list
 - Built-in reader that extracts article content server-side
 - Statistics page with per-feed article trends
 - OPML import/export; optional token auth
+- Installable as an app: web app manifest + service worker, so it can run in its
+  own window and open offline (the article data itself still needs the server)
 - Self-contained single binary — the Vue frontend is embedded into the Go executable
 
 ## Stack
@@ -62,6 +64,7 @@ docker run -d -p 8087:8087 -v tinyrss-data:/data \
 | --- | --- |
 | `make build` | `bun install` + `vite build` in `web/`, then `go build -o tinyrss .` (dist embedded) |
 | `make dev` | Run Go backend on `:8087` (dev token **`tinyrss`**) + Vite dev server with hot reload on `:5173`, `/api` proxied to the backend; Ctrl-C stops both |
+| `make web` | `bun install` + `vite build` in `web/` (frontend only) |
 | `make run` | `go run .` on `127.0.0.1:8087` |
 | `make test` | `go test ./...` + `bun run test` |
 | `make clean` | Remove `web/dist`, runtime `data/`, and the `tinyrss` binary |
@@ -71,6 +74,23 @@ docker run -d -p 8087:8087 -v tinyrss-data:/data \
 ```sh
 make dev      # open http://localhost:5173 and log in with the token: tinyrss
 ```
+
+## Install as an app
+
+TinyRSS ships a web app manifest and a service worker, so browsers can install
+it as a standalone app (own window, launcher/home-screen icon) and reopen it
+offline. The service worker caches only the static app shell — feed and article
+data always comes from the server.
+
+- **Chromium (Chrome, Edge, …):** open Settings → **App** → **Install app**, or
+  use the install icon in the address bar / ⋮ menu.
+- **iOS Safari:** Share → **Add to Home Screen**.
+- Once installed, Settings → App reports that TinyRSS is running as an app.
+
+Install is only offered in a secure context, so serve TinyRSS over HTTPS (or use
+`http://localhost` / `http://127.0.0.1`). A plain-HTTP LAN address such as
+`http://192.168.1.10:8087` will not be installable — put a TLS reverse proxy in
+front of it if you need that.
 
 ## Auth
 

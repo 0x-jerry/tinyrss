@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useStore } from '../../store'
 import type { ThemeMode } from '../../store/theme'
+import { installStore } from '../../store/install'
 import { useApiToast } from '../../api/useApiToast'
 import { useLoading } from '../../composables/useLoading'
 import { api } from '../../api/endpoints'
@@ -14,6 +15,17 @@ import DurationInput from '../shared/DurationInput.vue'
 
 const { feeds, theme } = useStore()
 const toast = useApiToast()
+
+const install = installStore.state
+
+const showInstallButton = computed(() => !install.isInstalled && install.canPrompt)
+
+const installHint = computed(() => {
+  if (install.isInstalled) return 'Installed — TinyRSS runs as an app.'
+  if (install.canPrompt) return 'Install TinyRSS for a standalone window and an offline app shell.'
+  if (install.isIOS) return 'In Safari, tap Share, then “Add to Home Screen”.'
+  return 'Use your browser’s Install option — the address bar icon or the ⋮ menu.'
+})
 
 const themeOptions: { mode: ThemeMode; label: string }[] = [
   { mode: 'system', label: 'System' },
@@ -315,6 +327,20 @@ function downloadText(filename: string, text: string, mime: string) {
         </div>
       </section>
 
+      <section class="section" aria-labelledby="app-title">
+        <div class="section__heading">
+          <div>
+            <h4 id="app-title" class="section__title">App</h4>
+            <p class="section__description">Use TinyRSS in its own window.</p>
+          </div>
+          <span aria-hidden="true" class="section__icon i-lucide-smartphone" />
+        </div>
+        <div class="install">
+          <p class="install__hint">{{ installHint }}</p>
+          <Button v-if="showInstallButton" size="sm" @click="installStore.promptInstall()">Install app</Button>
+        </div>
+      </section>
+
         </div>
 
         <div class="layout__right">
@@ -585,6 +611,18 @@ function downloadText(filename: string, text: string, mime: string) {
   grid-column: 1 / -1;
   color: var(--text-faint);
   font-size: 11px;
+}
+.install {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.install__hint {
+  margin: 0;
+  min-width: 0;
 }
 .state {
   display: flex;

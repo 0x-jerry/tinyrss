@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { RouterView, useRouter } from 'vue-router'
 import { useStore } from './store'
+import { installStore } from './store/install'
 import { toastStore } from './api/useApiToast'
 
 const router = useRouter()
 
 const { auth } = useStore()
+
+installStore.init()
 
 // Bounce to /login whenever a logout happens (user-initiated or a 401 from the
 // api client calls auth.logout). The router guard handles initial nav.

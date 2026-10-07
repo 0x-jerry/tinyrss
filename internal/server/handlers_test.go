@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"io/fs"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -32,13 +33,17 @@ const testRSS = `<?xml version="1.0" encoding="UTF-8"?>
 
 func newTestServer(t *testing.T) (*httptest.Server, *repository.Repo) {
 	t.Helper()
+	return newTestServerWithSPA(t, fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<h1>tinyrss</h1>")}})
+}
+
+func newTestServerWithSPA(t *testing.T, spa fs.FS) (*httptest.Server, *repository.Repo) {
+	t.Helper()
 	st, err := store.Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	repo := repository.NewRepo(st.DB)
 	fetcher := feeds.NewFetcher(repo)
-	spa := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<h1>tinyrss</h1>")}}
 	s := New(repo, fetcher, token, spa)
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(func() {

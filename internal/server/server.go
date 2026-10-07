@@ -4,11 +4,9 @@
 package server
 
 import (
-	"bytes"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -125,43 +123,4 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]any{"error": msg})
-}
-
-// spaHandler serves the embedded frontend, falling back to index.html so
-// history-mode routes resolve to the SPA shell.
-func spaHandler(spa fs.FS) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		path := strings.TrimPrefix(r.URL.Path, "/")
-		if path == "" {
-			path = "index.html"
-		}
-		if f, err := spa.Open(path); err == nil {
-			defer f.Close()
-			if st, err := f.Stat(); err == nil && !st.IsDir() {
-				if rs, ok := f.(io.ReadSeeker); ok {
-					http.ServeContent(w, r, path, st.ModTime(), rs)
-					return
-				}
-				data, _ := io.ReadAll(f)
-				http.ServeContent(w, r, path, st.ModTime(), bytes.NewReader(data))
-				return
-			}
-		}
-		if f, err := spa.Open("index.html"); err == nil {
-			defer f.Close()
-			st, _ := f.Stat()
-			if rs, ok := f.(io.ReadSeeker); ok {
-				http.ServeContent(w, r, "index.html", st.ModTime(), rs)
-				return
-			}
-			data, _ := io.ReadAll(f)
-			http.ServeContent(w, r, "index.html", st.ModTime(), bytes.NewReader(data))
-			return
-		}
-		http.NotFound(w, r)
-	})
 }

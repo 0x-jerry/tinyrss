@@ -24,6 +24,18 @@ const root = ref<HTMLElement | null>(null)
 // The title links to the article's own page in a new tab when that url is usable.
 const titleUrl = computed(() => externalUrl(props.url, window.location.href))
 
+// The body is raw sanitized html, so its links are captured by delegation: every
+// link opens in a new window, relative targets resolved against the article url.
+function onBodyClick(e: MouseEvent) {
+  if (!(e.target instanceof Element)) return
+  const anchor = e.target.closest('a[href]')
+  if (!anchor) return
+  const href = externalUrl(anchor.getAttribute('href'), props.url || window.location.href)
+  if (!href) return
+  e.preventDefault()
+  window.open(href, '_blank', 'noopener,noreferrer')
+}
+
 // The same component instance persists across article switches, so reset the
 // scroll position to the top whenever the article content changes.
 watch(
@@ -57,7 +69,7 @@ watch(
         <span v-if="publishedLabel"> · {{ publishedLabel }}</span>
       </div>
     </header>
-    <div class="reader-content__body" v-html="html"></div>
+    <div class="reader-content__body" v-html="html" @click="onBodyClick"></div>
     <div v-if="loading" class="reader-content__loading" aria-live="polite">
       <span aria-hidden="true" class="reader-content__spinner i-lucide-loader-circle" />
     </div>

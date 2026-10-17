@@ -173,41 +173,43 @@ function openUrl() {
 
 <template>
   <section class="reader">
-    <header class="reader__head">
+    <header class="reader__head" :class="{ 'reader__head--empty': !currentListItem }">
       <div class="reader__actions">
         <Button variant="ghost" size="sm" title="Back to list" class="reader__close" @click="emit('openList')">
           <span aria-hidden="true" class="i-lucide-chevron-left text-[16px]" />
         </Button>
-        <div class="reader__head-nav">
-          <Button variant="ghost" size="sm" title="Previous" @click="move(-1)">
-            <span aria-hidden="true" class="i-lucide-chevron-left text-[16px]" />
+        <template v-if="currentListItem">
+          <div class="reader__head-nav">
+            <Button variant="ghost" size="sm" title="Previous" @click="move(-1)">
+              <span aria-hidden="true" class="i-lucide-chevron-left text-[16px]" />
+            </Button>
+            <Button variant="ghost" size="sm" title="Next" @click="move(1)">
+              <span aria-hidden="true" class="i-lucide-chevron-right text-[16px]" />
+            </Button>
+          </div>
+          <Button variant="ghost" size="sm" :title="currentListItem.is_read ? 'Mark unread' : 'Mark read'" @click="toggleRead">
+            <span aria-hidden="true" class="i-lucide-check text-[16px]" /> {{ currentListItem.is_read ? 'Unread' : 'Read' }}
           </Button>
-          <Button variant="ghost" size="sm" title="Next" @click="move(1)">
-            <span aria-hidden="true" class="i-lucide-chevron-right text-[16px]" />
+          <Button variant="ghost" size="sm" :title="currentListItem.is_starred ? 'Unstar' : 'Star'" @click="toggleStar">
+            <span aria-hidden="true" class="i-lucide-star text-[16px]" :class="{ starred: currentListItem.is_starred }" />
           </Button>
-        </div>
-        <Button variant="ghost" size="sm" :title="currentListItem?.is_read ? 'Mark unread' : 'Mark read'" @click="toggleRead">
-          <span aria-hidden="true" class="i-lucide-check text-[16px]" /> {{ currentListItem?.is_read ? 'Unread' : 'Read' }}
-        </Button>
-        <Button variant="ghost" size="sm" :title="currentListItem?.is_starred ? 'Unstar' : 'Star'" @click="toggleStar">
-          <span aria-hidden="true" class="i-lucide-star text-[16px]" :class="{ starred: currentListItem?.is_starred }" />
-        </Button>
-        <select
-          class="reader__mode"
-          :value="feed?.render_mode ?? 0"
-          :disabled="!currentListItem || !feed"
-          title="Render mode"
-          @change="onModeChange"
-        >
-          <option :value="0">Content</option>
-          <option :value="2">Server</option>
-        </select>
-        <Button v-if="currentListItem?.url" variant="ghost" size="sm" title="Open in new window" @click="openUrl">
-          <span aria-hidden="true" class="i-lucide-external-link text-[16px]" />
-        </Button>
+          <select
+            class="reader__mode"
+            :value="feed?.render_mode ?? 0"
+            :disabled="!feed"
+            title="Render mode"
+            @change="onModeChange"
+          >
+            <option :value="0">Content</option>
+            <option :value="2">Server</option>
+          </select>
+          <Button v-if="currentListItem.url" variant="ghost" size="sm" title="Open in new window" @click="openUrl">
+            <span aria-hidden="true" class="i-lucide-external-link text-[16px]" />
+          </Button>
+        </template>
       </div>
     </header>
-    <div class="reader__nav" role="navigation" aria-label="Article navigation">
+    <div v-if="currentListItem" class="reader__nav" role="navigation" aria-label="Article navigation">
       <button
         type="button"
         class="reader__nav-btn reader__nav-btn--prev"
@@ -292,6 +294,11 @@ function openUrl() {
 }
 .reader__close, .reader__nav {
   display: none;
+}
+@media (min-width: 769px) {
+  .reader__head--empty {
+    display: none;
+  }
 }
 @media (max-width: 768px) {
   .reader__close {

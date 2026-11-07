@@ -5,6 +5,13 @@ embedded Vue 3 frontend, and a background goroutine polls your feeds into a
 local SQLite database. Classic 3-pane web UI: feeds/folders tree · article list
 · reading view.
 
+<details>
+<summary>📷 Preview</summary>
+
+![TinyRSS screenshot](docs/screenshot.png)
+
+</details>
+
 ## Features
 
 - Classic 3-pane web UI: feeds/folders tree · article list · reading view

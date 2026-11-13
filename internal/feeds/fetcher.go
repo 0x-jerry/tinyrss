@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -392,7 +393,7 @@ func (f *Fetcher) doRefresh(id int) (int, error) {
 		_ = f.repo.RecordFetchResult(id, "", "", msg, false)
 		return 0, err
 	}
-	items := normalizeItems(pf)
+	items := normalizeItems(pf, feed.FeedURL)
 	newCount, err := f.repo.AddItems(id, items)
 	if err != nil {
 		return 0, err
@@ -403,10 +404,31 @@ func (f *Fetcher) doRefresh(id int) (int, error) {
 	return newCount, nil
 }
 
-// normalizeItems maps a gofeed.Feed into our Item rows. GUID falls back to
-// link/title; malformed or missing dates fall back to a fixed oldest time
+// resolveItemURL turns a feed item link into an absolute http(s) URL: absolute
+// links are kept as-is, path-only links are resolved against the origin of
+// feedURL. Unresolvable links are returned unchanged.
+func resolveItemURL(link, feedURL string) string {
+	link = strings.TrimSpace(link)
+	if link == "" {
+		return ""
+	}
+	base, err := url.Parse(feedURL)
+	if err != nil || base.Host == "" {
+		return link
+	}
+	ref, err := url.Parse(link)
+	if err != nil {
+		ref = &url.URL{Path: link}
+	}
+	origin := url.URL{Scheme: base.Scheme, Host: base.Host}
+	return origin.ResolveReference(ref).String()
+}
+
+// normalizeItems maps a gofeed.Feed into our Item rows. Item links are resolved
+// against feedURL so a bare path never lands in the database. GUID falls back
+// to link/title; malformed or missing dates fall back to a fixed oldest time
 // (1900-01-01 00:00:00).
-func normalizeItems(pf *gofeed.Feed) []repository.Item {
+func normalizeItems(pf *gofeed.Feed, feedURL string) []repository.Item {
 	// The oldest representable value we store: items whose publish date could
 	// not be parsed sort to the bottom of the newest-first list, not the top.
 	const oldest = "1900-01-01 00:00:00"
@@ -434,7 +456,7 @@ func normalizeItems(pf *gofeed.Feed) []repository.Item {
 		items = append(items, repository.Item{
 			GUID:        guid,
 			Title:       strings.TrimSpace(it.Title),
-			URL:         it.Link,
+			URL:         resolveItemURL(it.Link, feedURL),
 			Author:      author,
 			Summary:     it.Description,
 			Content:     it.Content,

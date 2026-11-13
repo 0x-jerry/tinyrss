@@ -17,7 +17,7 @@ func parseFixture(t *testing.T, xml string) *gofeed.Feed {
 }
 
 func TestNormalizeRSS(t *testing.T) {
-	items := normalizeItems(parseFixture(t, rssXML))
+	items := normalizeItems(parseFixture(t, rssXML), "https://example.com/feed.xml")
 	if len(items) != 1 {
 		t.Fatalf("want 1 item, got %d", len(items))
 	}
@@ -40,7 +40,7 @@ func TestNormalizeRSS(t *testing.T) {
 }
 
 func TestNormalizeAtom(t *testing.T) {
-	items := normalizeItems(parseFixture(t, atomXML))
+	items := normalizeItems(parseFixture(t, atomXML), "https://example.com/feed.xml")
 	if len(items) != 1 {
 		t.Fatalf("want 1 item, got %d", len(items))
 	}
@@ -67,7 +67,7 @@ func TestNormalizeMissingFields(t *testing.T) {
 		<title>No metadata</title>
 		<link>https://example.com/x</link>
 	</item></channel></rss>`)
-	items := normalizeItems(pf)
+	items := normalizeItems(pf, "https://example.com/feed.xml")
 	if len(items) != 1 {
 		t.Fatalf("want 1 item, got %d", len(items))
 	}
@@ -79,5 +79,29 @@ func TestNormalizeMissingFields(t *testing.T) {
 	const oldest = "1900-01-01 00:00:00"
 	if it.PublishedAt != oldest {
 		t.Errorf("published_at should fall back to the oldest time, got %q", it.PublishedAt)
+	}
+}
+
+func TestNormalizeResolvesRelativeItemURLs(t *testing.T) {
+	pf := parseFixture(t, `<rss version="2.0"><channel>
+		<item><title>Root</title><link>/post/1</link></item>
+		<item><title>Bare</title><link>post/2</link></item>
+		<item><title>Absolute</title><link>https://other.example/post/3</link></item>
+		<item><title>None</title></item>
+	</channel></rss>`)
+	items := normalizeItems(pf, "https://example.com/blog/feed.xml")
+	want := []string{
+		"https://example.com/post/1",
+		"https://example.com/post/2",
+		"https://other.example/post/3",
+		"",
+	}
+	if len(items) != len(want) {
+		t.Fatalf("want %d items, got %d", len(want), len(items))
+	}
+	for i, it := range items {
+		if it.URL != want[i] {
+			t.Errorf("item %d url = %q, want %q", i, it.URL, want[i])
+		}
 	}
 }

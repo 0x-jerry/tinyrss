@@ -93,3 +93,31 @@ func TestDiscoverNoFeedLinks(t *testing.T) {
 		t.Fatal("expected error for a page without feed links")
 	}
 }
+
+func TestDiscoverSiteURLFallsBackToFeedOrigin(t *testing.T) {
+	cases := map[string]string{
+		"empty":    "",
+		"relative": "/blog",
+		"garbage":  "not a url",
+	}
+	for name, link := range cases {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+<title>No Site</title><link>` + link + `</link><description>d</description>
+</channel></rss>`))
+			}))
+			defer srv.Close()
+
+			f := NewFetcher(newTestRepo(t))
+			d, err := f.Discover(srv.URL+"/feed.xml", "")
+			if err != nil {
+				t.Fatalf("discover: %v", err)
+			}
+			if d.SiteURL != srv.URL {
+				t.Errorf("SiteURL = %q, want %q", d.SiteURL, srv.URL)
+			}
+		})
+	}
+}

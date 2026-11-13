@@ -52,9 +52,24 @@ func (f *Fetcher) discoverDirect(raw, proxyURL string) (*Discovered, error) {
 	return &Discovered{
 		FeedURL:     raw,
 		Title:       pf.Title,
-		SiteURL:     pf.Link,
+		SiteURL:     siteURLFor(pf.Link, raw),
 		Description: pf.Description,
 	}, nil
+}
+
+// siteURLFor returns link when it is a usable absolute http(s) URL; otherwise it
+// falls back to the origin of feedURL so dialogs never prefill a broken site
+// URL.
+func siteURLFor(link, feedURL string) string {
+	if u, err := url.Parse(strings.TrimSpace(link)); err == nil {
+		if (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" {
+			return u.String()
+		}
+	}
+	if u, err := url.Parse(feedURL); err == nil && u.Host != "" {
+		return u.Scheme + "://" + u.Host
+	}
+	return ""
 }
 
 // discoverFromHTML fetches raw as a web page, collects its feed-link hrefs and
@@ -91,7 +106,7 @@ func (f *Fetcher) discoverFromHTML(raw, proxyURL string) (*Discovered, error) {
 		return &Discovered{
 			FeedURL:     cand,
 			Title:       pf.Title,
-			SiteURL:     pf.Link,
+			SiteURL:     siteURLFor(pf.Link, cand),
 			Description: pf.Description,
 		}, nil
 	}

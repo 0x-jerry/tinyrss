@@ -13,6 +13,7 @@ import pkg from '../../../package.json'
 import Button from '../shared/Button.vue'
 import AppMark from '../shared/AppMark.vue'
 import Badge from '../shared/Badge.vue'
+import FeedIcon from '../shared/FeedIcon.vue'
 import Tooltip from '../shared/Tooltip.vue'
 import ConfirmDialog from '../shared/ConfirmDialog.vue'
 import SettingsModal from './SettingsModal.vue'
@@ -326,7 +327,7 @@ const refreshPercent = computed(() => {
                 @dragstart="onDragStart(feed)"
                 @dragend="onDragEnd"
               >
-                <span aria-hidden="true" class="i-lucide-rss text-[14px]" />
+                <FeedIcon :feed="feed" :size="14" />
                 <span class="row__label row__label--clip">{{ feed.title }}</span>
                 <Badge :count="feed.unread" />
                 <span v-if="feed.fetch_error" class="feed__err" aria-label="Fetch error" />
@@ -369,7 +370,7 @@ const refreshPercent = computed(() => {
                 @dragstart="onDragStart(feed)"
                 @dragend="onDragEnd"
               >
-                <span aria-hidden="true" class="i-lucide-rss text-[14px]" />
+                <FeedIcon :feed="feed" :size="14" />
                 <span class="row__label row__label--clip">{{ feed.title }}</span>
                 <Badge :count="feed.unread" />
                 <span v-if="feed.fetch_error" class="feed__err" aria-label="Fetch error" />

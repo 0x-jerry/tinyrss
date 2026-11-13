@@ -7,6 +7,7 @@ import type { Filter } from '../../store/items'
 import type { Item } from '../../types/models'
 import Button from '../shared/Button.vue'
 import EmptyState from '../shared/EmptyState.vue'
+import FeedIcon from '../shared/FeedIcon.vue'
 import { useApiToast } from '../../api/useApiToast'
 import { useLoading } from '../../composables/useLoading'
 import { nearestScrollTop } from '../../utils/scrollIntoViewNearest'
@@ -145,6 +146,12 @@ const refreshBusy = computed(() => refresh.isLoading || (nav.state.feedId == nul
 
 const hasMore = computed(() => items.state.page * items.state.limit < items.state.total)
 
+// O(1) feed lookup for the virtualized article rows, which carry only feed_id.
+const feedById = computed(() => new Map(feeds.state.feeds.map((f) => [f.id, f])))
+function feedFor(item: Item) {
+  return feedById.value.get(item.feed_id) ?? null
+}
+
 function dateLabel(iso: string): string {
   if (!iso) return ''
   const d = new Date(iso)
@@ -227,6 +234,7 @@ function dateLabel(iso: string): string {
             <div class="row__title">{{ data.is_read ? '' : '● ' }}{{ data.title }}</div>
             <div class="row__meta">
               <span class="row__meta-text">
+                <FeedIcon :feed="feedFor(data)" :size="12" class="row__feed-icon" />
                 {{ data.feed_title }}<template v-if="data.author"> · {{ data.author }}</template>
               </span>
               <span class="row__date"><time :datetime="data.published_at">{{ dateLabel(data.published_at) }}</time></span>
@@ -381,6 +389,10 @@ function dateLabel(iso: string): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.row__feed-icon {
+  margin-right: 4px;
+  vertical-align: -1px;
 }
 .row__date {
   flex: none;

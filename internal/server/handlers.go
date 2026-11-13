@@ -6,6 +6,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -37,6 +38,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/items/read-all", s.handleReadAll)
 
 	mux.HandleFunc("GET /api/render", s.handleRender)
+	mux.HandleFunc("GET /api/favicon", s.handleFavicon)
 
 	mux.HandleFunc("POST /api/opml/import", s.handleOpmlImport)
 	mux.HandleFunc("GET /api/opml/export", s.handleOpmlExport)
@@ -408,6 +410,69 @@ func writeRenderError(w http.ResponseWriter, msg string) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusBadGateway)
 	_, _ = w.Write([]byte(body))
+}
+
+// clampFaviconSize snaps a requested icon size to one of the buckets the
+// favicon service supports, picking the nearest.
+func clampFaviconSize(size int) int {
+	buckets := []int{16, 32, 64, 128, 256}
+	if size <= buckets[0] {
+		return buckets[0]
+	}
+	if size >= buckets[len(buckets)-1] {
+		return buckets[len(buckets)-1]
+	}
+	best := buckets[0]
+	for _, b := range buckets {
+		if absInt(b-size) < absInt(best-size) {
+			best = b
+		}
+	}
+	return best
+}
+
+func absInt(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+// handleFavicon proxies Google's favicon service so the browser can request a
+// site icon from TinyRSS itself. The caller-supplied domain only parameterizes
+// the upstream query (the dialed host is always the favicon service), so this
+// cannot be used to reach arbitrary hosts. It is exempt from token auth: an
+// <img> cannot send a bearer token, and the icons are public, non-sensitive.
+func (s *Server) handleFavicon(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	domain := strings.TrimSpace(q.Get("domain"))
+	if domain == "" {
+		writeError(w, http.StatusBadRequest, "domain is required")
+		return
+	}
+	if strings.ContainsAny(domain, "/ \t\r\n@") {
+		writeError(w, http.StatusBadRequest, "invalid domain")
+		return
+	}
+	u, err := url.Parse("//" + domain)
+	if err != nil || u.Hostname() == "" || u.Path != "" || u.RawQuery != "" {
+		writeError(w, http.StatusBadRequest, "invalid domain")
+		return
+	}
+	size := clampFaviconSize(atoiDefault(q.Get("sz"), 32))
+	ct, body, err := s.fetcher.FetchFavicon(r.Context(), u.Hostname(), size)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "favicon unavailable")
+		return
+	}
+	if ct == "" {
+		ct = "image/png"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
 }
 
 func (s *Server) handleOpmlImport(w http.ResponseWriter, r *http.Request) {

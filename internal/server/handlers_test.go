@@ -753,3 +753,78 @@ func TestRenderUsesFeedProxy(t *testing.T) {
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
+func TestHandleFavicon(t *testing.T) {
+	ts, _ := newTestServer(t)
+
+	var lastQuery string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lastQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write([]byte("pngbytes"))
+	}))
+	defer upstream.Close()
+	restore := feeds.SetFaviconBaseURL(upstream.URL)
+	defer restore()
+
+	// Missing domain -> 400.
+	resp, _ := do(t, ts, "GET", "/api/favicon", token, nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("missing domain: %d", resp.StatusCode)
+	}
+
+	// Invalid domains -> 400.
+	for _, badDomain := range []string{"a/b", "x%20y", "a@b"} {
+		resp, _ := do(t, ts, "GET", "/api/favicon?domain="+badDomain, token, nil)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("invalid domain %q: %d", badDomain, resp.StatusCode)
+		}
+	}
+
+	// Happy path: proxies the image, forwards clamped size, sets cache headers.
+	resp, body := do(t, ts, "GET", "/api/favicon?domain=example.com&sz=999", token, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("favicon: %d %s", resp.StatusCode, body)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "image/png" {
+		t.Fatalf("content type = %q", ct)
+	}
+	if cc := resp.Header.Get("Cache-Control"); !strings.Contains(cc, "max-age") {
+		t.Fatalf("cache-control = %q", cc)
+	}
+	if string(body) != "pngbytes" {
+		t.Fatalf("body = %q", body)
+	}
+	if !strings.Contains(lastQuery, "sz=256") {
+		t.Fatalf("size not clamped to 256: query %q", lastQuery)
+	}
+	if !strings.Contains(lastQuery, "domain=example.com") {
+		t.Fatalf("domain not forwarded: query %q", lastQuery)
+	}
+
+	// Default size is 32 when omitted.
+	_, _ = do(t, ts, "GET", "/api/favicon?domain=example.com", token, nil)
+	if !strings.Contains(lastQuery, "sz=32") {
+		t.Fatalf("default size not 32: query %q", lastQuery)
+	}
+
+	// The route is reachable without a token even though auth is enabled.
+	resp, _ = do(t, ts, "GET", "/api/favicon?domain=example.com", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("favicon without token: %d", resp.StatusCode)
+	}
+}
+
+func TestHandleFaviconUpstreamFailure(t *testing.T) {
+	ts, _ := newTestServer(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer upstream.Close()
+	restore := feeds.SetFaviconBaseURL(upstream.URL)
+	defer restore()
+
+	resp, _ := do(t, ts, "GET", "/api/favicon?domain=example.com", token, nil)
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d", resp.StatusCode)
+	}
+}

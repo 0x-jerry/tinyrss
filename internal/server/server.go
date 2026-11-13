@@ -4,17 +4,14 @@
 package server
 
 import (
-	"crypto/subtle"
 	"encoding/json"
-	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
-	"strings"
-	"time"
 
 	"tinyrss/internal/feeds"
 	"tinyrss/internal/repository"
+	"tinyrss/internal/server/middlewares"
 )
 
 type Server struct {
@@ -36,81 +33,16 @@ func (s *Server) Handler() http.Handler {
 	api := http.NewServeMux()
 	s.routes(api)
 
-	apiChain := s.withRecovery(s.withRequestID(s.withLogging(s.withAuth(api))))
-	staticChain := s.withRecovery(s.withRequestID(s.withLogging(spaHandler(s.spa))))
+	// /api/health lets clients probe liveness; /api/favicon is fetched by <img>
+	// tags (which cannot send a bearer token) and only proxies public icons.
+	authMW := middlewares.Auth(s.token, middlewares.ExcludePaths("/api/health", "/api/favicon"))
+	apiChain := middlewares.Recovery(middlewares.RequestID(middlewares.Logging(authMW(api))))
+	staticChain := middlewares.Recovery(middlewares.RequestID(middlewares.Logging(spaHandler(s.spa))))
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", apiChain)
 	mux.Handle("/", staticChain)
 	return mux
-}
-
-type statusRecorder struct {
-	http.ResponseWriter
-	status int
-}
-
-func (r *statusRecorder) WriteHeader(code int) {
-	r.status = code
-	r.ResponseWriter.WriteHeader(code)
-}
-
-func (s *Server) withRequestID(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := r.Header.Get("X-Request-ID")
-		if id == "" {
-			id = fmt.Sprintf("%d", time.Now().UnixNano())
-		}
-		w.Header().Set("X-Request-ID", id)
-		r = r.WithContext(contextWithReqID(r.Context(), id))
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (s *Server) withLogging(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		rec := &statusRecorder{ResponseWriter: w, status: 200}
-		next.ServeHTTP(rec, r)
-		log.Printf("%s %s -> %d (%s) [%s]",
-			r.Method, r.URL.Path, rec.status, time.Since(start).Round(time.Millisecond), reqID(r.Context()))
-	})
-}
-
-func (s *Server) withRecovery(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if rec := recover(); rec != nil {
-				log.Printf("panic serving %s %s: %v", r.Method, r.URL.Path, rec)
-				writeError(w, http.StatusInternalServerError, "internal error")
-			}
-		}()
-		next.ServeHTTP(w, r)
-	})
-}
-
-// withAuth guards every /api/* route except /api/health when a token is set.
-func (s *Server) withAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if len(s.token) == 0 || r.URL.Path == "/api/health" || s.authorized(r) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		writeError(w, http.StatusUnauthorized, "unauthorized")
-	})
-}
-
-func (s *Server) authorized(r *http.Request) bool {
-	const prefix = "Bearer "
-	auth := r.Header.Get("Authorization")
-	if !strings.HasPrefix(auth, prefix) {
-		return false
-	}
-	tok := strings.TrimSpace(auth[len(prefix):])
-	if len(tok) != len(s.token) {
-		return false
-	}
-	return subtle.ConstantTimeCompare([]byte(tok), s.token) == 1
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

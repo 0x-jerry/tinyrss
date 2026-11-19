@@ -43,6 +43,12 @@ describe('buildItemQuery', () => {
     expect(q).toContain('page=2')
     expect(q).toContain('limit=50')
   })
+
+  it('omits order for the default newest-first sort and sends asc on demand', () => {
+    expect(buildItemQuery({ feedId: null }, 'all', '', 1, 50)).not.toContain('order')
+    expect(buildItemQuery({ feedId: null }, 'all', '', 1, 50, 'desc')).not.toContain('order')
+    expect(buildItemQuery({ feedId: null }, 'all', '', 1, 50, 'asc')).toContain('order=asc')
+  })
 })
 
 describe('items provider', () => {
@@ -176,6 +182,19 @@ describe('items provider', () => {
     expect(p.state.filter).toBe('unread')
     await p.setSearch('cats')
     expect(calls[1]).toContain('search=cats')
+  })
+
+  it('toggles the date order and reloads from the first page', async () => {
+    const p = provider()
+    await p.load()
+    await p.nextPage()
+    await p.setOrder('asc')
+    expect(p.state.order).toBe('asc')
+    expect(calls[calls.length - 1]).toContain('order=asc')
+    expect(calls[calls.length - 1]).toContain('page=1')
+    await p.setOrder('desc')
+    expect(p.state.order).toBe('desc')
+    expect(calls[calls.length - 1]).not.toContain('order')
   })
 
   it('marks an item read optimistically and decrements the feed badge', async () => {

@@ -112,6 +112,17 @@ const markAllRead = useLoading(async () => {
 
 const refreshTitle = computed(() => (nav.state.feedId != null ? 'Refresh feed' : 'Refresh all articles'))
 
+const sortAsc = computed(() => items.state.order === 'asc')
+const sortTitle = computed(() => (sortAsc.value ? 'Sort newest first' : 'Sort oldest first'))
+
+async function toggleSort() {
+  try {
+    await items.setOrder(sortAsc.value ? 'desc' : 'asc')
+  } catch (e) {
+    toast.fromError(e)
+  }
+}
+
 const refresh = useLoading(async () => {
   const feedId = nav.state.feedId
   if (feedId != null) {
@@ -186,6 +197,19 @@ function dateLabel(iso: string): string {
             {{ opt.label }}
           </button>
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          :title="sortTitle"
+          class="toolbar__sort"
+          @click="toggleSort"
+        >
+          <span
+            aria-hidden="true"
+            class="text-[16px]"
+            :class="sortAsc ? 'i-lucide-arrow-up-narrow-wide' : 'i-lucide-arrow-down-narrow-wide'"
+          />
+        </Button>
         <Button
           variant="ghost"
           size="sm"
@@ -306,7 +330,7 @@ function dateLabel(iso: string): string {
   background: var(--surface-active);
   color: var(--accent-soft-text);
 }
-.toolbar__refresh {
+.toolbar__refresh, .toolbar__sort {
   flex: 0 0 auto;
 }
 .toolbar__actions {

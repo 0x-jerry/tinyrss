@@ -316,6 +316,7 @@ func (s *Server) handleListItems(w http.ResponseWriter, r *http.Request) {
 		Search:  q.Get("search"),
 		Page:    atoiDefault(q.Get("page"), 1),
 		Limit:   atoiDefault(q.Get("limit"), 50),
+		Asc:     q.Get("order") == "asc",
 	}
 	items, total, err := s.repo.ListItems(filter)
 	if err != nil {

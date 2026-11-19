@@ -84,7 +84,7 @@ func (r *Repo) ListItems(filter ItemFilter) ([]Item, int, error) {
 	listQuery := `SELECT it.id, it.feed_id, f.title AS feed_title, it.title, it.url, it.author,
 		it.published_at, it.is_read, it.is_starred, it.created_at
 		FROM items it JOIN feeds f ON f.id = it.feed_id WHERE ` + where +
-		` ORDER BY it.published_at IS NULL, it.published_at DESC, it.id DESC LIMIT ? OFFSET ?`
+		` ORDER BY ` + itemOrder(filter) + ` LIMIT ? OFFSET ?`
 	args = append(args, limit, (page-1)*limit)
 
 	rows, err := r.DB.Query(listQuery, args...)
@@ -112,6 +112,15 @@ func (r *Repo) ListItems(filter ItemFilter) ([]Item, int, error) {
 		out = append(out, it)
 	}
 	return out, total, rows.Err()
+}
+
+// itemOrder sorts by publish date in the requested direction. Undated items
+// always sort last; the id tiebreak keeps paging stable.
+func itemOrder(filter ItemFilter) string {
+	if filter.Asc {
+		return "it.published_at IS NULL, it.published_at ASC, it.id ASC"
+	}
+	return "it.published_at IS NULL, it.published_at DESC, it.id DESC"
 }
 
 // itemWhere builds the WHERE clause (no leading "WHERE") and bound args.

@@ -145,6 +145,53 @@ func TestRepoSearch(t *testing.T) {
 	}
 }
 
+func TestRepoListItemsOrder(t *testing.T) {
+	repo := newTestRepo(t)
+	feed, err := repo.CreateFeed(Feed{Title: "F", FeedURL: "https://example.com/rss"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AddItems(feed.ID, []Item{
+		{GUID: "old", Title: "Old", PublishedAt: "2024-01-01T00:00:00Z"},
+		{GUID: "new", Title: "New", PublishedAt: "2024-03-01T00:00:00Z"},
+		{GUID: "undated", Title: "Undated"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	titles := func(filter ItemFilter) []string {
+		t.Helper()
+		items, _, err := repo.ListItems(filter)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := make([]string, len(items))
+		for i, it := range items {
+			out[i] = it.Title
+		}
+		return out
+	}
+
+	if got := titles(ItemFilter{FeedID: feed.ID}); !equalStrings(got, []string{"New", "Old", "Undated"}) {
+		t.Fatalf("default order = %v, want newest-first", got)
+	}
+	if got := titles(ItemFilter{FeedID: feed.ID, Asc: true}); !equalStrings(got, []string{"Old", "New", "Undated"}) {
+		t.Fatalf("asc order = %v, want oldest-first with undated last", got)
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestUpdateFeedPartial(t *testing.T) {
 	repo := newTestRepo(t)
 	folderA, err := repo.CreateFolder("A")

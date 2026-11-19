@@ -5,8 +5,12 @@ import type { Item } from '../types/models'
 
 export type Filter = 'all' | 'unread' | 'starred'
 
+/** Date order of the article list: newest first or oldest first. */
+export type SortOrder = 'asc' | 'desc'
+
 const FILTERS: readonly Filter[] = ['all', 'unread', 'starred']
 const SCOPE_FILTERS_KEY = 'tinyrss.scopeFilters'
+const SORT_ORDER_KEY = 'tinyrss.itemOrder'
 
 export type ScopeKey = 'all' | `feed:${number}`
 
@@ -42,6 +46,7 @@ export interface ItemsState {
   loading: boolean
   filter: Filter
   search: string
+  order: SortOrder
 }
 
 export interface ItemsDeps {
@@ -58,6 +63,7 @@ export interface ItemsStore {
   nextPage: () => Promise<void>
   setFilter: (f: Filter) => Promise<void>
   setSearch: (s: string) => Promise<void>
+  setOrder: (o: SortOrder) => Promise<void>
   openItem: (id: number) => Promise<void>
   toggleRead: (id: number) => Promise<void>
   toggleStar: (id: number) => Promise<void>
@@ -74,12 +80,14 @@ export function buildItemQuery(
   search: string,
   page: number,
   limit: number,
+  order: SortOrder = 'desc',
 ): string {
   const p = new URLSearchParams()
   if (selection.feedId != null) p.set('feed_id', String(selection.feedId))
   if (filter === 'unread') p.set('unread', 'true')
   if (filter === 'starred') p.set('starred', 'true')
   if (search) p.set('search', search)
+  if (order === 'asc') p.set('order', 'asc')
   p.set('page', String(page))
   p.set('limit', String(limit))
   return p.toString()
@@ -90,6 +98,7 @@ export function createItemsStore(deps: ItemsDeps): ItemsStore {
   const filters = useLocalStorage<Partial<Record<ScopeKey, Filter>>>(SCOPE_FILTERS_KEY, {}, {
     serializer: scopeFiltersSerializer,
   })
+  const order = useLocalStorage<SortOrder>(SORT_ORDER_KEY, 'desc')
 
   function currentScope(): ScopeKey {
     return scopeKeyOf(deps.getSelection())
@@ -108,6 +117,11 @@ export function createItemsStore(deps: ItemsDeps): ItemsStore {
       return f && FILTERS.includes(f) ? f : 'unread'
     },
     search: '',
+    // Same idea as the filter: read on access, so the toggle takes effect
+    // without mirroring the stored value into reactive state.
+    get order(): SortOrder {
+      return order.value === 'asc' ? 'asc' : 'desc'
+    },
   })
 
   function notify() {
@@ -118,7 +132,7 @@ export function createItemsStore(deps: ItemsDeps): ItemsStore {
     raw.loading = true
     try {
       const currentFilter = raw.filter
-      const res = await api.listItems(buildItemQuery(deps.getSelection(), currentFilter, raw.search, page, raw.limit))
+      const res = await api.listItems(buildItemQuery(deps.getSelection(), currentFilter, raw.search, page, raw.limit, raw.order))
       // Unread is the default filter; on a default load, when nothing is unread
       // in the current scope, fall back to showing everything instead of an
       // empty list. An explicit filter choice (setFilter) is never overridden.
@@ -174,6 +188,10 @@ export function createItemsStore(deps: ItemsDeps): ItemsStore {
     },
     setSearch: async (s) => {
       raw.search = s
+      await fetchPage(1, true)
+    },
+    setOrder: async (o) => {
+      order.value = o
       await fetchPage(1, true)
     },
     openItem: async (id) => {

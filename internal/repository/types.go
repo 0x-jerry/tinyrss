@@ -90,4 +90,6 @@ type ItemFilter struct {
 	Search  string
 	Page    int
 	Limit   int
+	// Asc sorts by publish date oldest-first instead of the default newest-first.
+	Asc bool
 }

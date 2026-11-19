@@ -9,7 +9,6 @@ export interface ReaderContentProps {
   feedTitle?: string
   author?: string
   publishedLabel?: string
-  loading?: boolean
 }
 
 export interface ReaderContentEmits {
@@ -70,15 +69,11 @@ watch(
       </div>
     </header>
     <div class="reader-content__body" v-html="html" @click="onBodyClick"></div>
-    <div v-if="loading" class="reader-content__loading" aria-live="polite">
-      <span aria-hidden="true" class="reader-content__spinner i-lucide-loader-circle" />
-    </div>
   </div>
 </template>
 
 <style scoped>
 .reader-content {
-  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -222,24 +217,5 @@ watch(
   margin-top: 6px;
   font-size: 13px;
   color: var(--text-muted);
-}
-.reader-content__loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
-  z-index: 5;
-}
-.reader-content__spinner {
-  font-size: 22px;
-  color: var(--text-muted);
-  animation: reader-spin 0.8s linear infinite;
-}
-@keyframes reader-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

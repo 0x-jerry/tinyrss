@@ -239,16 +239,19 @@ function openUrl() {
       :feed-title="currentListItem?.feed_title"
       :author="currentListItem?.author"
       :published-label="publishedLabel"
-      :loading="loading"
       @feed-title-click="onFeedTitleClick"
     />
     <div v-else-if="contentMsg" class="reader__msg">{{ contentMsg }}</div>
     <EmptyState v-else message="Select an article to read it." icon="i-lucide-filter" />
+    <div v-if="loading" class="reader__loading" role="status" aria-live="polite">
+      <span aria-hidden="true" class="reader__spinner i-lucide-loader-circle" />
+    </div>
   </section>
 </template>
 
 <style scoped>
 .reader {
+  position: relative;
   flex: 1;
   min-width: 0;
   height: 100%;
@@ -294,6 +297,26 @@ function openUrl() {
 }
 .reader__close, .reader__nav {
   display: none;
+}
+.reader__loading {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  cursor: wait;
+}
+.reader__spinner {
+  font-size: 22px;
+  color: var(--text-muted);
+  animation: reader-spin 0.8s linear infinite;
+}
+@keyframes reader-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 @media (min-width: 769px) {
   .reader__head--empty {

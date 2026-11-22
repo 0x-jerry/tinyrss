@@ -5,6 +5,15 @@ import (
 	"strconv"
 )
 
+// Keys of the rows in the settings table. Declared as constants so that the
+// readers and writers can never drift apart.
+const (
+	settingKeyFetchLogCleanupSeconds    = "fetch_log_cleanup_seconds"
+	settingKeyRenderCacheCleanupSeconds = "render_cache_cleanup_seconds"
+	settingKeyRefreshIntervalSeconds    = "refresh_interval_seconds"
+	settingKeyMinRefreshGapSeconds      = "min_refresh_gap_seconds"
+)
+
 // settingValue reads one settings row, defaulting to def when the key is
 // absent or unparsable.
 func (r *Repo) settingValue(key string, def int) (int, error) {
@@ -30,19 +39,19 @@ func (r *Repo) setSetting(key string, seconds int) error {
 // GetSettings returns the user-adjustable settings, defaulting only when no
 // value has ever been stored for a key.
 func (r *Repo) GetSettings() (Settings, error) {
-	fl, err := r.settingValue("fetch_log_cleanup_seconds", defaultFetchLogCleanupSeconds)
+	fl, err := r.settingValue(settingKeyFetchLogCleanupSeconds, defaultFetchLogCleanupSeconds)
 	if err != nil {
 		return Settings{}, err
 	}
-	rc, err := r.settingValue("render_cache_cleanup_seconds", defaultRenderCacheCleanupSeconds)
+	rc, err := r.settingValue(settingKeyRenderCacheCleanupSeconds, defaultRenderCacheCleanupSeconds)
 	if err != nil {
 		return Settings{}, err
 	}
-	ri, err := r.settingValue("refresh_interval_seconds", DefaultRefreshIntervalSeconds)
+	ri, err := r.settingValue(settingKeyRefreshIntervalSeconds, DefaultRefreshIntervalSeconds)
 	if err != nil {
 		return Settings{}, err
 	}
-	gap, err := r.settingValue("min_refresh_gap_seconds", DefaultMinRefreshGapSeconds)
+	gap, err := r.settingValue(settingKeyMinRefreshGapSeconds, DefaultMinRefreshGapSeconds)
 	if err != nil {
 		return Settings{}, err
 	}
@@ -57,22 +66,22 @@ func (r *Repo) GetSettings() (Settings, error) {
 // SetFetchLogCleanupSeconds stores the fetch-log auto-clean retention in
 // seconds; 0 disables.
 func (r *Repo) SetFetchLogCleanupSeconds(seconds int) error {
-	return r.setSetting("fetch_log_cleanup_seconds", seconds)
+	return r.setSetting(settingKeyFetchLogCleanupSeconds, seconds)
 }
 
 // SetRenderCacheCleanupSeconds stores the render-cache auto-clean retention in
 // seconds; 0 disables.
 func (r *Repo) SetRenderCacheCleanupSeconds(seconds int) error {
-	return r.setSetting("render_cache_cleanup_seconds", seconds)
+	return r.setSetting(settingKeyRenderCacheCleanupSeconds, seconds)
 }
 
 // SetRefreshIntervalSeconds stores the auto-refresh poll interval in seconds.
 func (r *Repo) SetRefreshIntervalSeconds(seconds int) error {
-	return r.setSetting("refresh_interval_seconds", seconds)
+	return r.setSetting(settingKeyRefreshIntervalSeconds, seconds)
 }
 
 // SetMinRefreshGapSeconds stores the minimum gap between manual refresh-alls
 // in seconds.
 func (r *Repo) SetMinRefreshGapSeconds(seconds int) error {
-	return r.setSetting("min_refresh_gap_seconds", seconds)
+	return r.setSetting(settingKeyMinRefreshGapSeconds, seconds)
 }
